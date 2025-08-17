@@ -183,7 +183,10 @@ export const store = reactive({
       // Get latest values
       return relevantAccounts.reduce((total, account) => {
         const latestEntry = this.monthlyEntries
-          .filter(entry => entry.accountId._id === account._id)
+          .filter(entry => {
+            const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+            return entryAccountId === account._id
+          })
           .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
         
         return total + (latestEntry ? latestEntry.amount : 0)
@@ -193,7 +196,10 @@ export const store = reactive({
     // Get values for specific month
     return relevantAccounts.reduce((total, account) => {
       const entry = this.monthlyEntries.find(
-        entry => entry.accountId._id === account._id && entry.month === month
+        entry => {
+          const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+          return entryAccountId === account._id && entry.month === month
+        }
       )
       return total + (entry ? entry.amount : 0)
     }, 0)

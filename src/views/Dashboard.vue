@@ -5,8 +5,21 @@
       <p class="subtitle">Track your wealth progression over time</p>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
+    <!-- Loading State -->
+    <div v-if="store.loading" class="loading-state">
+      <p>Loading your financial data...</p>
+    </div>
+
+    <!-- Error State -->
+    <div v-if="store.error" class="error-state">
+      <p>⚠️ {{ store.error }}</p>
+      <button @click="store.initialize()" class="btn btn-primary">Retry</button>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div v-if="!store.loading && !store.error">
+      <!-- Summary Cards -->
+      <div class="summary-cards">
       <div class="card deposits">
         <div class="card-header">
           <h3>💳 Total Deposits</h3>
@@ -66,6 +79,7 @@
         </div>
       </div>
     </div>
+    </div> <!-- Close the conditional content div -->
   </div>
 </template>
 
@@ -85,13 +99,23 @@ export default {
     let progressionChartInstance = null
     let breakdownChartInstance = null
 
-    const totalDeposits = computed(() => 
-      store.getTotalByType(ACCOUNT_TYPES.DEPOSITS)
-    )
+    const totalDeposits = computed(() => {
+      try {
+        return store.getTotalByType(ACCOUNT_TYPES.DEPOSITS)
+      } catch (error) {
+        console.error('Error calculating total deposits:', error)
+        return 0
+      }
+    })
     
-    const totalInvestments = computed(() => 
-      store.getTotalByType(ACCOUNT_TYPES.INVESTMENTS)
-    )
+    const totalInvestments = computed(() => {
+      try {
+        return store.getTotalByType(ACCOUNT_TYPES.INVESTMENTS)
+      } catch (error) {
+        console.error('Error calculating total investments:', error)
+        return 0
+      }
+    })
     
     const totalNetWorth = computed(() => 
       totalDeposits.value + totalInvestments.value
@@ -235,6 +259,7 @@ export default {
     })
 
     return {
+      store,
       totalDeposits,
       totalInvestments,
       totalNetWorth,
@@ -391,6 +416,27 @@ export default {
   font-weight: bold;
   font-size: 1.1rem;
   color: #333;
+}
+
+.loading-state,
+.error-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: white;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  margin-bottom: 2rem;
+}
+
+.loading-state p {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.error-state p {
+  font-size: 1.1rem;
+  color: #dc3545;
+  margin-bottom: 1rem;
 }
 
 @media (max-width: 768px) {
