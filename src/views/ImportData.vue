@@ -13,11 +13,11 @@
         <ul>
           <li><strong>First column:</strong> Bank/Wallet names</li>
           <li><strong>Second column:</strong> Account type (deposits, investments)</li>
-          <li><strong>Third column:</strong> Account sub-type (e.g., Checking Account, 401(k))</li>
+          <li><strong>Third column:</strong> Category or Subcategory (e.g., Checking Account, 401(k), or custom subcategory names)</li>
           <li><strong>Remaining columns:</strong> Months/Years (e.g., Jan/2023, Feb/2023)</li>
         </ul>
         <p class="example-note">
-          💡 <strong>Example:</strong> Each row represents an account with its type and monthly balances.
+          💡 <strong>Smart Import:</strong> The third column can be either a predefined category (like "Checking Account") or a custom subcategory name. If it matches a predefined category, it will be used as the category. Otherwise, it will be created as a new subcategory under the appropriate default category.
         </p>
         <div class="example-actions">
           <button @click="downloadExample" class="btn btn-secondary">
@@ -32,7 +32,7 @@
             <tr>
               <th>Bank/Wallet</th>
               <th>Type</th>
-              <th>Sub-type</th>
+              <th>Category/Subcategory</th>
               <th>Jan/2023</th>
               <th>Feb/2023</th>
             </tr>
@@ -48,19 +48,31 @@
             <tr>
               <td>Bank B</td>
               <td>investments</td>
-              <td>401(k)</td>
+              <td>Stock Portfolio</td>
               <td>200</td>
               <td>250</td>
             </tr>
             <tr>
-              <td>Wallet X</td>
+              <td>Bank C</td>
               <td>deposits</td>
-              <td>Savings Account</td>
+              <td>Emergency Fund</td>
               <td>50</td>
               <td>60</td>
             </tr>
+            <tr>
+              <td>Brokerage X</td>
+              <td>investments</td>
+              <td>401k Rollover</td>
+              <td>300</td>
+              <td>320</td>
+            </tr>
           </tbody>
         </table>
+        <p class="example-explanation">
+          <small>
+            <strong>Note:</strong> "Checking Account" and "Stock Portfolio" are predefined categories, while "Emergency Fund" and "401k Rollover" will be created as subcategories.
+          </small>
+        </p>
       </div>
     </div>
 
@@ -147,6 +159,7 @@
                   <th>Account Name</th>
                   <th>Type</th>
                   <th>Category</th>
+                  <th>Subcategory</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -155,6 +168,7 @@
                   <td>{{ account.name }}</td>
                   <td>{{ account.type }}</td>
                   <td>{{ account.category }}</td>
+                  <td>{{ account.subcategoryName || 'None' }}</td>
                   <td>
                     <span class="status-badge" :class="account.exists ? 'existing' : 'new'">
                       {{ account.exists ? 'Existing' : 'New' }}
@@ -226,7 +240,7 @@
 
 <script>
 import * as XLSX from 'xlsx'
-import { store } from '../store/api-store'
+import { store, DEPOSIT_CATEGORIES, INVESTMENT_CATEGORIES } from '../store/api-store'
 import { downloadExampleXLSX } from '../utils/exampleFile'
 
 export default {
@@ -336,14 +350,14 @@ export default {
         const row = jsonData[rowIndex]
         const accountName = row[0]
         const accountType = row[1]
-        const accountCategory = row[2]
+        const subTypeOrCategory = row[2]
         
         if (!accountName || accountName.trim() === '') {
           continue // Skip empty rows
         }
         
-        if (!accountType || !accountCategory) {
-          continue // Skip rows without type or category
+        if (!accountType || !subTypeOrCategory) {
+          continue // Skip rows without type or sub-type/category
         }
         
         // Validate account type
@@ -353,18 +367,38 @@ export default {
           continue
         }
         
+        // Determine if the third column is a predefined category or a subcategory
+        const trimmedSubType = subTypeOrCategory.trim()
+        const availableCategories = normalizedType === 'deposits' 
+          ? DEPOSIT_CATEGORIES
+          : INVESTMENT_CATEGORIES
+        
+        let accountCategory
+        let subcategoryName = null
+        
+        // Check if it matches a predefined category
+        if (availableCategories.some(cat => cat.toLowerCase() === trimmedSubType.toLowerCase())) {
+          accountCategory = availableCategories.find(cat => cat.toLowerCase() === trimmedSubType.toLowerCase())
+        } else {
+          // Treat as subcategory - use first available category as default
+          accountCategory = availableCategories[0]
+          subcategoryName = trimmedSubType
+        }
+        
         // Add account (check for duplicates)
         let account = accounts.find(acc => 
           acc.name === accountName.trim() && 
           acc.type === normalizedType && 
-          acc.category === accountCategory.trim()
+          acc.category === accountCategory &&
+          acc.subcategoryName === subcategoryName
         )
         
         if (!account) {
           account = {
             name: accountName.trim(),
             type: normalizedType,
-            category: accountCategory.trim()
+            category: accountCategory,
+            subcategoryName: subcategoryName
           }
           accounts.push(account)
         }
@@ -393,7 +427,8 @@ export default {
           entries.push({
             accountName: accountName.trim(),
             accountType: normalizedType,
-            accountCategory: accountCategory.trim(),
+            accountCategory: accountCategory,
+            subcategoryName: subcategoryName,
             month: monthYear,
             amount: numAmount
           })
@@ -453,8 +488,8 @@ export default {
     },
     
     async preparePreviewData(parsedData) {
-      // Load existing accounts to check which ones already exist
-      await store.loadAccounts()
+      // Load existing accounts and subcategories to check which ones already exist
+      await Promise.all([store.loadAccounts(), store.loadSubcategories()])
       
       const existingAccounts = store.accounts
       
@@ -464,7 +499,11 @@ export default {
         exists: existingAccounts.some(existing => 
           existing.name.toLowerCase() === account.name.toLowerCase() &&
           existing.type === account.type &&
-          existing.category === account.category
+          existing.category === account.category &&
+          // Check subcategory match - both null or both match
+          ((account.subcategoryName === null && !existing.subcategoryId) ||
+           (account.subcategoryName !== null && existing.subcategoryId && 
+            store.subcategories.find(sub => sub._id === existing.subcategoryId)?.name === account.subcategoryName))
         )
       }))
       
@@ -485,7 +524,41 @@ export default {
       this.clearError()
       
       try {
-        // First, create/update accounts
+        // First, create subcategories if needed
+        const subcategoryMap = new Map() // Map subcategory names to IDs
+        
+        for (const accountData of this.previewData.accounts) {
+          if (accountData.subcategoryName && !accountData.exists) {
+            const subcategoryKey = `${accountData.subcategoryName}-${accountData.type}`
+            
+            if (!subcategoryMap.has(subcategoryKey)) {
+              // Check if subcategory already exists
+              let existingSubcategory = store.subcategories.find(sub => 
+                sub.name === accountData.subcategoryName && 
+                sub.parentCategory === accountData.type
+              )
+              
+              if (!existingSubcategory) {
+                // Create new subcategory
+                try {
+                  existingSubcategory = await store.addSubcategory({
+                    name: accountData.subcategoryName,
+                    parentCategory: accountData.type,
+                    description: `Imported from XLSX`
+                  })
+                  console.log('Created subcategory:', existingSubcategory)
+                } catch (error) {
+                  console.warn(`Failed to create subcategory '${accountData.subcategoryName}':`, error)
+                  continue
+                }
+              }
+              
+              subcategoryMap.set(subcategoryKey, existingSubcategory._id)
+            }
+          }
+        }
+        
+        // Then, create/update accounts
         const accountMap = new Map() // Map account names to IDs
         
         for (const accountData of this.previewData.accounts) {
@@ -496,19 +569,35 @@ export default {
             account = store.accounts.find(existing =>
               existing.name.toLowerCase() === accountData.name.toLowerCase() &&
               existing.type === accountData.type &&
-              existing.category === accountData.category
+              existing.category === accountData.category &&
+              // Check subcategory match
+              ((accountData.subcategoryName === null && !existing.subcategoryId) ||
+               (accountData.subcategoryName !== null && existing.subcategoryId && 
+                store.subcategories.find(sub => sub._id === existing.subcategoryId)?.name === accountData.subcategoryName))
             )
           } else {
             // Create new account
-            account = await store.addAccount({
+            const accountPayload = {
               name: accountData.name,
               type: accountData.type,
               category: accountData.category
-            })
+            }
+            
+            // Add subcategory if specified
+            if (accountData.subcategoryName) {
+              const subcategoryKey = `${accountData.subcategoryName}-${accountData.type}`
+              const subcategoryId = subcategoryMap.get(subcategoryKey)
+              if (subcategoryId) {
+                accountPayload.subcategoryId = subcategoryId
+              }
+            }
+            
+            account = await store.addAccount(accountPayload)
+            console.log('Created account:', account)
           }
           
           if (account && account._id) {
-            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.category}`, account._id)
+            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.category}-${accountData.subcategoryName || ''}`, account._id)
           }
         }
         
@@ -516,7 +605,7 @@ export default {
         const entries = []
         
         for (const entryData of this.previewData.entries) {
-          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.accountCategory}`
+          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.accountCategory}-${entryData.subcategoryName || ''}`
           const accountId = accountMap.get(accountKey)
           
           if (accountId) {
@@ -532,7 +621,16 @@ export default {
           await store.saveMonthlyEntries(entries)
         }
         
-        this.successMessage = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
+        // Count created subcategories
+        const createdSubcategoriesCount = subcategoryMap.size
+        const createdAccountsCount = this.previewData.accounts.filter(acc => !acc.exists).length
+        
+        let successMsg = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
+        if (createdSubcategoriesCount > 0) {
+          successMsg += ` Created ${createdSubcategoriesCount} new subcategories.`
+        }
+        
+        this.successMessage = successMsg
         this.clearPreview()
         
       } catch (error) {
@@ -644,6 +742,13 @@ export default {
 .example-table {
   overflow-x: auto;
   margin-top: 1.5rem;
+}
+
+.example-explanation {
+  margin-top: 0.75rem;
+  color: #666;
+  font-style: italic;
+  text-align: center;
 }
 
 .example-table table {
