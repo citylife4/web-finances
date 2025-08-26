@@ -50,8 +50,7 @@ db.createCollection('monthlyentries', {
         },
         amount: {
           bsonType: 'number',
-          minimum: 0,
-          description: 'Amount must be a positive number'
+          description: 'Amount must be a number'
         }
       }
     }

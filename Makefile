@@ -20,7 +20,7 @@ dev:
 	@echo "Development environment started!"
 	@echo "Frontend: http://localhost:5173"
 	@echo "Backend: http://localhost:3001"
-	@echo "MongoDB: localhost:27017"
+	@echo "MongoDB: localhost:27018"
 
 # Production environment
 prod:
@@ -28,6 +28,7 @@ prod:
 	@echo "Production environment started!"
 	@echo "Frontend: http://localhost:80"
 	@echo "Backend: http://localhost:3001"
+	@echo "MongoDB: localhost:27019"
 
 # Build all images
 build:
