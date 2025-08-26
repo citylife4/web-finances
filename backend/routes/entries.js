@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const MonthlyEntry = require('../models/MonthlyEntry');
 const Account = require('../models/Account');
+const mongoose = require('mongoose');
 
 // GET /api/entries - Get all monthly entries
 router.get('/', async (req, res) => {
@@ -31,34 +32,64 @@ router.get('/month/:month', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { entries } = req.body; // Array of { accountId, month, amount }
-    
+
     if (!Array.isArray(entries)) {
       return res.status(400).json({ error: 'Entries must be an array' });
     }
-    
+
+    // Log incoming payload (trimmed) to help debugging large imports
+    console.log(`POST /api/entries received ${entries.length} entries`);
+    if (entries.length > 0) {
+      console.log('First entry:', JSON.stringify(entries[0], null, 2));
+    }
+
     const results = [];
-    
-    for (const entryData of entries) {
-      const { accountId, month, amount } = entryData;
-      
+
+    for (let i = 0; i < entries.length; i++) {
+      const entryData = entries[i];
+      const { accountId, month, amount } = entryData || {};
+
+      // Basic validation with helpful error messages
+      if (!accountId || typeof accountId !== 'string' || !mongoose.Types.ObjectId.isValid(accountId)) {
+        console.error(`Invalid accountId at index ${i}:`, accountId);
+        return res.status(400).json({ error: `Invalid accountId at index ${i}: ${accountId}` });
+      }
+
+      if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+        console.error(`Invalid month at index ${i}:`, month);
+        return res.status(400).json({ error: `Invalid month format at index ${i}: ${month}` });
+      }
+
+      const numAmount = Number(amount);
+      if (isNaN(numAmount)) {
+        console.error(`Invalid amount at index ${i}:`, amount);
+        return res.status(400).json({ error: `Invalid amount at index ${i}: ${amount}` });
+      }
+
       // Verify account exists
+      console.log(`Looking for account with ID: ${accountId}`);
       const account = await Account.findById(accountId);
       if (!account) {
-        return res.status(400).json({ error: `Account ${accountId} not found` });
+        console.error(`Account not found: ${accountId}`);
+        return res.status(400).json({ error: `Account ${accountId} not found at index ${i}` });
       }
-      
+
+      console.log(`Found account: ${account.name} (${account.type})`);
+
       // Update or create entry (upsert)
       const entry = await MonthlyEntry.findOneAndUpdate(
         { accountId, month },
-        { amount },
+        { amount: numAmount },
         { new: true, upsert: true, runValidators: true }
       );
-      
+
       results.push(entry);
     }
-    
+
+    console.log(`Successfully processed ${results.length} entries`);
     res.status(201).json(results);
   } catch (error) {
+    console.error('Error saving entries:', error);
     res.status(400).json({ error: error.message });
   }
 });
