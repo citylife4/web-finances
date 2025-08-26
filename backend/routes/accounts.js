@@ -1,12 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const Account = require('../models/Account');
-const MonthlyEntry = require('../models/MonthlyEntry');
 
 // GET /api/accounts - Get all accounts
 router.get('/', async (req, res) => {
   try {
-    const accounts = await Account.find().sort({ createdAt: -1 });
+    const accounts = await req.app.locals.db.getAccounts();
     res.json(accounts);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -18,14 +16,14 @@ router.post('/', async (req, res) => {
   try {
     const { name, type, category, description } = req.body;
     
-    const account = new Account({
+    const accountData = {
       name,
       type,
       category,
       description
-    });
+    };
     
-    const savedAccount = await account.save();
+    const savedAccount = await req.app.locals.db.createAccount(accountData);
     res.status(201).json(savedAccount);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -37,11 +35,8 @@ router.put('/:id', async (req, res) => {
   try {
     const { name, type, category, description } = req.body;
     
-    const account = await Account.findByIdAndUpdate(
-      req.params.id,
-      { name, type, category, description },
-      { new: true, runValidators: true }
-    );
+    const updates = { name, type, category, description };
+    const account = await req.app.locals.db.updateAccount(req.params.id, updates);
     
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
@@ -56,14 +51,11 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/accounts/:id - Delete an account
 router.delete('/:id', async (req, res) => {
   try {
-    const account = await Account.findByIdAndDelete(req.params.id);
+    const account = await req.app.locals.db.deleteAccount(req.params.id);
     
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
-    
-    // Also delete all related monthly entries
-    await MonthlyEntry.deleteMany({ accountId: req.params.id });
     
     res.json({ message: 'Account and related entries deleted successfully' });
   } catch (error) {

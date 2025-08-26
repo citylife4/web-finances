@@ -1,14 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const MonthlyEntry = require('../models/MonthlyEntry');
-const Account = require('../models/Account');
 
 // GET /api/entries - Get all monthly entries
 router.get('/', async (req, res) => {
   try {
-    const entries = await MonthlyEntry.find()
-      .populate('accountId', 'name type category')
-      .sort({ month: -1, createdAt: -1 });
+    const entries = await req.app.locals.db.getEntries();
     res.json(entries);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -18,9 +14,7 @@ router.get('/', async (req, res) => {
 // GET /api/entries/month/:month - Get entries for a specific month
 router.get('/month/:month', async (req, res) => {
   try {
-    const entries = await MonthlyEntry.find({ month: req.params.month })
-      .populate('accountId', 'name type category')
-      .sort({ createdAt: -1 });
+    const entries = await req.app.locals.db.getEntriesByMonth(req.params.month);
     res.json(entries);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -42,18 +36,14 @@ router.post('/', async (req, res) => {
       const { accountId, month, amount } = entryData;
       
       // Verify account exists
-      const account = await Account.findById(accountId);
+      const accounts = await req.app.locals.db.getAccounts();
+      const account = accounts.find(acc => acc._id === accountId);
       if (!account) {
         return res.status(400).json({ error: `Account ${accountId} not found` });
       }
       
       // Update or create entry (upsert)
-      const entry = await MonthlyEntry.findOneAndUpdate(
-        { accountId, month },
-        { amount },
-        { new: true, upsert: true, runValidators: true }
-      );
-      
+      const entry = await req.app.locals.db.createOrUpdateEntry({ accountId, month, amount });
       results.push(entry);
     }
     
@@ -68,17 +58,22 @@ router.put('/:id', async (req, res) => {
   try {
     const { amount } = req.body;
     
-    const entry = await MonthlyEntry.findByIdAndUpdate(
-      req.params.id,
-      { amount },
-      { new: true, runValidators: true }
-    ).populate('accountId', 'name type category');
+    // For now, this is a simple implementation - in a more complex system,
+    // we'd need to get the entry first, then update it
+    const entries = await req.app.locals.db.getEntries();
+    const existingEntry = entries.find(e => e._id === req.params.id);
     
-    if (!entry) {
+    if (!existingEntry) {
       return res.status(404).json({ error: 'Entry not found' });
     }
     
-    res.json(entry);
+    const updatedEntry = await req.app.locals.db.createOrUpdateEntry({
+      accountId: existingEntry.accountId._id,
+      month: existingEntry.month,
+      amount
+    });
+    
+    res.json(updatedEntry);
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -87,7 +82,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/entries/:id - Delete a monthly entry
 router.delete('/:id', async (req, res) => {
   try {
-    const entry = await MonthlyEntry.findByIdAndDelete(req.params.id);
+    const entry = await req.app.locals.db.deleteEntry(req.params.id);
     
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
@@ -102,65 +97,7 @@ router.delete('/:id', async (req, res) => {
 // GET /api/entries/analytics/totals - Get monthly totals for analytics
 router.get('/analytics/totals', async (req, res) => {
   try {
-    const pipeline = [
-      {
-        $lookup: {
-          from: 'accounts',
-          localField: 'accountId',
-          foreignField: '_id',
-          as: 'account'
-        }
-      },
-      {
-        $unwind: '$account'
-      },
-      {
-        $group: {
-          _id: {
-            month: '$month',
-            type: '$account.type'
-          },
-          total: { $sum: '$amount' }
-        }
-      },
-      {
-        $group: {
-          _id: '$_id.month',
-          deposits: {
-            $sum: {
-              $cond: [
-                { $eq: ['$_id.type', 'deposits'] },
-                '$total',
-                0
-              ]
-            }
-          },
-          investments: {
-            $sum: {
-              $cond: [
-                { $eq: ['$_id.type', 'investments'] },
-                '$total',
-                0
-              ]
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          month: '$_id',
-          deposits: 1,
-          investments: 1,
-          total: { $add: ['$deposits', '$investments'] },
-          _id: 0
-        }
-      },
-      {
-        $sort: { month: 1 }
-      }
-    ];
-    
-    const totals = await MonthlyEntry.aggregate(pipeline);
+    const totals = await req.app.locals.db.getMonthlyTotals();
     res.json(totals);
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -219,6 +219,48 @@ Edit `nginx.conf` to customize frontend serving and API proxying.
 ### MongoDB Initialization
 Modify `mongo-init/init.js` to customize database setup.
 
+### Oracle Database Support
+To use Oracle Autonomous Database:
+
+1. **Create Oracle-specific environment file:**
+   ```bash
+   # .env.oracle
+   DB_TYPE=oracle
+   ORACLE_USER=ADMIN
+   ORACLE_PASSWORD=your-password
+   ORACLE_CONNECTION_STRING=your-connection-string
+   ORACLE_WALLET_LOCATION=/app/wallet
+   ORACLE_WALLET_PASSWORD=wallet-password
+   ```
+
+2. **Create custom Docker compose for Oracle:**
+   ```yaml
+   version: '3.8'
+   services:
+     backend:
+       build:
+         context: ./backend
+         dockerfile: Dockerfile.oracle
+       environment:
+         - NODE_ENV=production
+         - DB_TYPE=oracle
+         - ORACLE_USER=ADMIN
+         - ORACLE_PASSWORD=your-password
+         - ORACLE_CONNECTION_STRING=your-connection-string
+         - ORACLE_WALLET_LOCATION=/app/wallet
+         - ORACLE_WALLET_PASSWORD=wallet-password
+       volumes:
+         - ./oracle-wallet:/app/wallet:ro
+   ```
+
+3. **Run Oracle initialization script:**
+   ```bash
+   # Connect to your Oracle instance and run:
+   @oracle-init/init.sql
+   ```
+
+For detailed Oracle setup, see [ORACLE.md](./ORACLE.md).
+
 ## ❗ Troubleshooting
 
 ### Common Issues

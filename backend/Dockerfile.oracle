@@ -1,0 +1,49 @@
+# Backend Dockerfile for Oracle support
+FROM node:20-alpine
+
+# Install Oracle Instant Client dependencies
+RUN apk add --no-cache \
+    wget \
+    unzip \
+    libc6-compat \
+    libaio
+
+# Download and install Oracle Instant Client
+WORKDIR /opt/oracle
+RUN wget https://download.oracle.com/otn_software/linux/instantclient/2112000/instantclient-basic-linux.x64-21.12.0.0.0dbru.zip && \
+    unzip instantclient-basic-linux.x64-21.12.0.0.0dbru.zip && \
+    rm instantclient-basic-linux.x64-21.12.0.0.0dbru.zip
+
+# Set Oracle environment variables
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_21_12:$LD_LIBRARY_PATH
+ENV PATH=/opt/oracle/instantclient_21_12:$PATH
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S backend -u 1001
+
+# Change ownership of the app directory
+RUN chown -R backend:nodejs /app
+USER backend
+
+# Expose port
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node healthcheck.js
+
+# Start the application
+CMD ["npm", "start"]

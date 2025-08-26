@@ -12,6 +12,22 @@ dist
 dist-ssr
 *.local
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Oracle Wallet files (contain sensitive information)
+oracle-wallet/
+*.zip
+cwallet.sso
+ewallet.p12
+keystore.jks
+ojdbc.properties
+sqlnet.ora
+tnsnames.ora
+truststore.jks
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

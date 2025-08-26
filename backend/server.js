@@ -1,6 +1,6 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const DatabaseFactory = require('./database');
 require('dotenv').config();
 
 const app = express();
@@ -10,16 +10,38 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/finance-tracker';
+// Database connection
+let dbAdapter;
 
-mongoose.connect(MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
-  })
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-  });
+async function initializeDatabase() {
+  try {
+    dbAdapter = await DatabaseFactory.createAdapter();
+    
+    // Make adapter available to routes even before connection
+    app.locals.db = dbAdapter;
+    
+    await dbAdapter.connect();
+    console.log('Database connected successfully');
+  } catch (error) {
+    console.error('Database connection error:', error);
+    console.log('Server will continue running without database connection');
+    
+    // Create a mock adapter for testing if connection fails
+    if (!app.locals.db) {
+      app.locals.db = {
+        getAccounts: async () => [],
+        createAccount: async () => ({ _id: 'mock', message: 'Database not connected' }),
+        updateAccount: async () => null,
+        deleteAccount: async () => null,
+        getEntries: async () => [],
+        getEntriesByMonth: async () => [],
+        createOrUpdateEntry: async () => ({ _id: 'mock', message: 'Database not connected' }),
+        deleteEntry: async () => null,
+        getMonthlyTotals: async () => []
+      };
+    }
+  }
+}
 
 // Routes
 app.use('/api/accounts', require('./routes/accounts'));
@@ -32,4 +54,21 @@ app.get('/api/health', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Initialize database and start server
+initializeDatabase().then(() => {
+  console.log('Database initialization completed');
+}).catch((error) => {
+  console.error('Failed to initialize database:', error);
+  console.log('Server will continue running in mock mode');
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Shutting down gracefully...');
+  if (dbAdapter) {
+    await dbAdapter.disconnect();
+  }
+  process.exit(0);
 });

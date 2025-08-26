@@ -7,8 +7,8 @@ A Vue.js application for tracking your financial accounts and monitoring wealth 
 - **Account Management**: Add and organize deposit and investment accounts with categories
 - **Monthly Entries**: Record account balances on a monthly basis
 - **Dashboard**: Visualize your wealth progression with interactive charts
-- **MongoDB Integration**: Persistent data storage with MongoDB database
-- **REST API**: Backend API built with Express.js and Mongoose
+- **Database Support**: Choose between MongoDB or Oracle Autonomous Database
+- **REST API**: Backend API built with Express.js with database abstraction layer
 
 ## Account Types & Categories
 
@@ -62,7 +62,7 @@ cd backend
 npm install
 ```
 
-4. Start MongoDB service
+4. Start MongoDB service (or configure Oracle - see below)
 5. Start the backend server:
 ```bash
 cd backend
@@ -73,6 +73,20 @@ npm run dev
 ```bash
 npm run dev
 ```
+
+### 🗄️ Database Configuration
+
+#### MongoDB (Default)
+The application uses MongoDB by default. Follow the installation steps above.
+
+#### Oracle Autonomous Database
+To use Oracle Autonomous Database instead:
+
+1. Set environment variable: `DB_TYPE=oracle`
+2. Configure Oracle connection parameters in your `.env` file
+3. Run the Oracle initialization script: `oracle-init/init.sql`
+
+For detailed Oracle setup instructions, see [ORACLE.md](./ORACLE.md).
 
 ## 🐳 Docker Setup
 
@@ -120,14 +134,18 @@ For detailed Docker documentation, see [DOCKER.md](./DOCKER.md).
 
 ### Backend
 - **Express.js** REST API server
-- **Mongoose** MongoDB ODM
+- **Database Abstraction Layer** supporting multiple database types
+- **MongoDB Support** with Mongoose ODM
+- **Oracle Autonomous Database Support** with native Oracle driver
 - **CORS** enabled for frontend communication
 - **Environment-based configuration**
 
 ### Database
-- **MongoDB** for persistent data storage
-- **Collections**: accounts, monthlyentries
-- **Indexes** optimized for performance
+- **MongoDB**: Document-based storage with collections and indexes
+- **Oracle Autonomous Database**: Relational database with tables and SQL queries
+- **Database Adapter Pattern**: Seamless switching between database types
+- **Schema validation** for data integrity
+- **Optimized indexes** for performance
 - **Schema validation** for data integrity
 
 ## 🔧 API Endpoints
