@@ -25,7 +25,7 @@
           <h3>💳 Total Deposits</h3>
         </div>
         <div class="card-amount">
-          ${{ formatCurrency(totalDeposits) }}
+          {{ formatCurrency(totalDeposits) }}
         </div>
       </div>
       
@@ -34,7 +34,7 @@
           <h3>📈 Total Investments</h3>
         </div>
         <div class="card-amount">
-          ${{ formatCurrency(totalInvestments) }}
+          {{ formatCurrency(totalInvestments) }}
         </div>
       </div>
       
@@ -43,7 +43,7 @@
           <h3>💎 Total Net Worth</h3>
         </div>
         <div class="card-amount">
-          ${{ formatCurrency(totalNetWorth) }}
+          {{ formatCurrency(totalNetWorth) }}
         </div>
       </div>
     </div>
@@ -74,7 +74,7 @@
             <span class="entry-month">{{ formatMonth(entry.month) }}</span>
           </div>
           <div class="entry-amount">
-            ${{ formatCurrency(entry.amount) }}
+            {{ formatCurrency(entry.amount) }}
           </div>
         </div>
       </div>
@@ -129,7 +129,7 @@ export default {
     )
 
     const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('en-US').format(amount)
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
     }
 
     const formatMonth = (monthString) => {
@@ -197,7 +197,7 @@ export default {
               beginAtZero: true,
               ticks: {
                 callback: function(value) {
-                  return '$' + new Intl.NumberFormat('en-US').format(value)
+                  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(value)
                 }
               }
             }
@@ -206,7 +206,7 @@ export default {
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  return context.dataset.label + ': $' + new Intl.NumberFormat('en-US').format(context.parsed.y)
+                  return context.dataset.label + ': ' + new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed.y)
                 }
               }
             }
@@ -244,7 +244,7 @@ export default {
               callbacks: {
                 label: function(context) {
                   const percentage = ((context.parsed / totalNetWorth.value) * 100).toFixed(1)
-                  return context.label + ': $' + new Intl.NumberFormat('en-US').format(context.parsed) + ' (' + percentage + '%)'
+                  return context.label + ': ' + new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed) + ' (' + percentage + '%)'
                 }
               }
             }

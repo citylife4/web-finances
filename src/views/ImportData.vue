@@ -181,7 +181,7 @@
                 <tr v-for="entry in previewData.entries.slice(0, 50)" :key="`${entry.accountName}-${entry.month}`">
                   <td>{{ entry.accountName }}</td>
                   <td>{{ entry.month }}</td>
-                  <td>${{ formatCurrency(entry.amount) }}</td>
+                  <td>{{ formatCurrency(entry.amount) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -316,7 +316,13 @@ export default {
     
     parseReverseTableData(jsonData) {
       // Extract headers (months/years) from first row, skipping first 3 columns (Bank/Wallet, Type, Sub-type)
-      const headers = jsonData[0].slice(3).filter(header => header && header.trim())
+      // Normalize headers to strings before trimming to avoid "header.trim is not a function" when
+      // a header cell is not already a string (e.g. number, Date, or array).
+      const headers = jsonData[0]
+        .slice(3)
+        .map(h => (h === undefined || h === null) ? '' : String(h))
+        .map(h => h.trim())
+        .filter(h => h)
       
       if (headers.length === 0) {
         throw new Error('No month/year columns found')
@@ -405,7 +411,11 @@ export default {
         /^(\w{3})\/(\d{4})$/i,  // Jan/2023
         /^(\w{3})\s+(\d{4})$/i, // Jan 2023
         /^(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
-        /^(\w+)\s+(\d{4})$/i    // January 2023
+        /^(\w+)\s+(\d{4})$/i,    // January 2023
+        /^'(\w{3})\/(\d{4})$/i,  // Jan/2023
+        /^'(\w{3})\s+(\d{4})$/i, // Jan 2023
+        /^'(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
+        /^'(\w+)\s+(\d{4})$/i    // January 2023
       ]
       
       for (const pattern of patterns) {
@@ -557,7 +567,9 @@ export default {
     },
     
     formatCurrency(amount) {
-      return new Intl.NumberFormat('en-US', {
+      return new Intl.NumberFormat('de-DE', {
+        style: 'currency',
+        currency: 'EUR',
         minimumFractionDigits: 0,
         maximumFractionDigits: 2
       }).format(amount)
