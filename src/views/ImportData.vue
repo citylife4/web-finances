@@ -13,11 +13,11 @@
         <ul>
           <li><strong>First column:</strong> Bank/Wallet names</li>
           <li><strong>Second column:</strong> Account type (deposits, investments)</li>
-          <li><strong>Third column:</strong> Category or Subcategory (e.g., Checking Account, 401(k), or custom subcategory names)</li>
+          <li><strong>Third column:</strong> Category name (e.g., Checking Account, 401(k), Emergency Fund)</li>
           <li><strong>Remaining columns:</strong> Months/Years (e.g., Jan/2023, Feb/2023)</li>
         </ul>
         <p class="example-note">
-          💡 <strong>Smart Import:</strong> The third column can be either a predefined category (like "Checking Account") or a custom subcategory name. If it matches a predefined category, it will be used as the category. Otherwise, it will be created as a new subcategory under the appropriate default category.
+          💡 <strong>Smart Import:</strong> If a category in the third column doesn't exist, it will be automatically created for the specified account type.
         </p>
         <div class="example-actions">
           <button @click="downloadExample" class="btn btn-secondary">
@@ -32,7 +32,7 @@
             <tr>
               <th>Bank/Wallet</th>
               <th>Type</th>
-              <th>Category/Subcategory</th>
+              <th>Category</th>
               <th>Jan/2023</th>
               <th>Feb/2023</th>
             </tr>
@@ -70,7 +70,7 @@
         </table>
         <p class="example-explanation">
           <small>
-            <strong>Note:</strong> "Checking Account" and "Stock Portfolio" are predefined categories, while "Emergency Fund" and "401k Rollover" will be created as subcategories.
+            <strong>Note:</strong> All categories will be created automatically if they don't exist.
           </small>
         </p>
       </div>
@@ -159,7 +159,6 @@
                   <th>Account Name</th>
                   <th>Type</th>
                   <th>Category</th>
-                  <th>Subcategory</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -167,8 +166,7 @@
                 <tr v-for="account in previewData.accounts" :key="account.name">
                   <td>{{ account.name }}</td>
                   <td>{{ account.type }}</td>
-                  <td>{{ account.category }}</td>
-                  <td>{{ account.subcategoryName || 'None' }}</td>
+                  <td>{{ account.categoryName }}</td>
                   <td>
                     <span class="status-badge" :class="account.exists ? 'existing' : 'new'">
                       {{ account.exists ? 'Existing' : 'New' }}
@@ -240,7 +238,7 @@
 
 <script>
 import * as XLSX from 'xlsx'
-import { store, DEPOSIT_CATEGORIES, INVESTMENT_CATEGORIES } from '../store/api-store'
+import { store } from '../store/api-store'
 import { downloadExampleXLSX } from '../utils/exampleFile'
 
 export default {
@@ -367,38 +365,21 @@ export default {
           continue
         }
         
-        // Determine if the third column is a predefined category or a subcategory
-        const trimmedSubType = subTypeOrCategory.trim()
-        const availableCategories = normalizedType === 'deposits' 
-          ? DEPOSIT_CATEGORIES
-          : INVESTMENT_CATEGORIES
-        
-        let accountCategory
-        let subcategoryName = null
-        
-        // Check if it matches a predefined category
-        if (availableCategories.some(cat => cat.toLowerCase() === trimmedSubType.toLowerCase())) {
-          accountCategory = availableCategories.find(cat => cat.toLowerCase() === trimmedSubType.toLowerCase())
-        } else {
-          // Treat as subcategory - use first available category as default
-          accountCategory = availableCategories[0]
-          subcategoryName = trimmedSubType
-        }
+        // Determine category name from third column
+        const categoryName = subTypeOrCategory.trim()
         
         // Add account (check for duplicates)
         let account = accounts.find(acc => 
           acc.name === accountName.trim() && 
           acc.type === normalizedType && 
-          acc.category === accountCategory &&
-          acc.subcategoryName === subcategoryName
+          acc.categoryName === categoryName
         )
         
         if (!account) {
           account = {
             name: accountName.trim(),
             type: normalizedType,
-            category: accountCategory,
-            subcategoryName: subcategoryName
+            categoryName: categoryName
           }
           accounts.push(account)
         }
@@ -427,8 +408,7 @@ export default {
           entries.push({
             accountName: accountName.trim(),
             accountType: normalizedType,
-            accountCategory: accountCategory,
-            subcategoryName: subcategoryName,
+            categoryName: categoryName,
             month: monthYear,
             amount: numAmount
           })
@@ -488,8 +468,8 @@ export default {
     },
     
     async preparePreviewData(parsedData) {
-      // Load existing accounts and subcategories to check which ones already exist
-      await Promise.all([store.loadAccounts(), store.loadSubcategories()])
+      // Load existing accounts and categories to check which ones already exist
+      await Promise.all([store.loadAccounts(), store.loadCategories()])
       
       const existingAccounts = store.accounts
       
@@ -499,11 +479,9 @@ export default {
         exists: existingAccounts.some(existing => 
           existing.name.toLowerCase() === account.name.toLowerCase() &&
           existing.type === account.type &&
-          existing.category === account.category &&
-          // Check subcategory match - both null or both match
-          ((account.subcategoryName === null && !existing.subcategoryId) ||
-           (account.subcategoryName !== null && existing.subcategoryId && 
-            store.subcategories.find(sub => sub._id === existing.subcategoryId)?.name === account.subcategoryName))
+          // Check if the category matches
+          (existing.categoryId && 
+           store.categories.find(cat => cat._id === existing.categoryId._id)?.name === account.categoryName)
         )
       }))
       
@@ -524,36 +502,36 @@ export default {
       this.clearError()
       
       try {
-        // First, create subcategories if needed
-        const subcategoryMap = new Map() // Map subcategory names to IDs
+        // First, create categories if needed
+        const categoryMap = new Map() // Map category names to IDs
         
         for (const accountData of this.previewData.accounts) {
-          if (accountData.subcategoryName && !accountData.exists) {
-            const subcategoryKey = `${accountData.subcategoryName}-${accountData.type}`
+          if (accountData.categoryName && !accountData.exists) {
+            const categoryKey = `${accountData.categoryName}-${accountData.type}`
             
-            if (!subcategoryMap.has(subcategoryKey)) {
-              // Check if subcategory already exists
-              let existingSubcategory = store.subcategories.find(sub => 
-                sub.name === accountData.subcategoryName && 
-                sub.parentCategory === accountData.type
+            if (!categoryMap.has(categoryKey)) {
+              // Check if category already exists
+              let existingCategory = store.categories.find(cat => 
+                cat.name === accountData.categoryName && 
+                cat.type === accountData.type
               )
               
-              if (!existingSubcategory) {
-                // Create new subcategory
+              if (!existingCategory) {
+                // Create new category
                 try {
-                  existingSubcategory = await store.addSubcategory({
-                    name: accountData.subcategoryName,
-                    parentCategory: accountData.type,
+                  existingCategory = await store.addCategory({
+                    name: accountData.categoryName,
+                    type: accountData.type,
                     description: `Imported from XLSX`
                   })
-                  console.log('Created subcategory:', existingSubcategory)
+                  console.log('Created category:', existingCategory)
                 } catch (error) {
-                  console.warn(`Failed to create subcategory '${accountData.subcategoryName}':`, error)
+                  console.warn(`Failed to create category '${accountData.categoryName}':`, error)
                   continue
                 }
               }
               
-              subcategoryMap.set(subcategoryKey, existingSubcategory._id)
+              categoryMap.set(categoryKey, existingCategory._id)
             }
           }
         }
@@ -569,27 +547,24 @@ export default {
             account = store.accounts.find(existing =>
               existing.name.toLowerCase() === accountData.name.toLowerCase() &&
               existing.type === accountData.type &&
-              existing.category === accountData.category &&
-              // Check subcategory match
-              ((accountData.subcategoryName === null && !existing.subcategoryId) ||
-               (accountData.subcategoryName !== null && existing.subcategoryId && 
-                store.subcategories.find(sub => sub._id === existing.subcategoryId)?.name === accountData.subcategoryName))
+              // Check category match
+              (existing.categoryId && 
+               store.categories.find(cat => cat._id === existing.categoryId._id)?.name === accountData.categoryName)
             )
           } else {
             // Create new account
+            const categoryKey = `${accountData.categoryName}-${accountData.type}`
+            const categoryId = categoryMap.get(categoryKey)
+            
+            if (!categoryId) {
+              console.warn(`No category ID found for ${accountData.categoryName}`)
+              continue
+            }
+            
             const accountPayload = {
               name: accountData.name,
               type: accountData.type,
-              category: accountData.category
-            }
-            
-            // Add subcategory if specified
-            if (accountData.subcategoryName) {
-              const subcategoryKey = `${accountData.subcategoryName}-${accountData.type}`
-              const subcategoryId = subcategoryMap.get(subcategoryKey)
-              if (subcategoryId) {
-                accountPayload.subcategoryId = subcategoryId
-              }
+              categoryId: categoryId
             }
             
             account = await store.addAccount(accountPayload)
@@ -597,7 +572,9 @@ export default {
           }
           
           if (account && account._id) {
-            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.category}-${accountData.subcategoryName || ''}`, account._id)
+            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.categoryName}`, account._id)
+          }
+        }
           }
         }
         
@@ -605,7 +582,7 @@ export default {
         const entries = []
         
         for (const entryData of this.previewData.entries) {
-          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.accountCategory}-${entryData.subcategoryName || ''}`
+          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.categoryName}`
           const accountId = accountMap.get(accountKey)
           
           if (accountId) {
@@ -621,13 +598,13 @@ export default {
           await store.saveMonthlyEntries(entries)
         }
         
-        // Count created subcategories
-        const createdSubcategoriesCount = subcategoryMap.size
+        // Count created categories
+        const createdCategoriesCount = categoryMap.size
         const createdAccountsCount = this.previewData.accounts.filter(acc => !acc.exists).length
         
         let successMsg = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
-        if (createdSubcategoriesCount > 0) {
-          successMsg += ` Created ${createdSubcategoriesCount} new subcategories.`
+        if (createdCategoriesCount > 0) {
+          successMsg += ` Created ${createdCategoriesCount} new categories.`
         }
         
         this.successMessage = successMsg
