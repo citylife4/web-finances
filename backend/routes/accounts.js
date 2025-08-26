@@ -7,7 +7,7 @@ const MonthlyEntry = require('../models/MonthlyEntry');
 router.get('/', async (req, res) => {
   try {
     const accounts = await Account.find()
-      .populate('subcategoryId', 'name parentCategory')
+      .populate('categoryId', 'name type')
       .sort({ createdAt: -1 });
     res.json(accounts);
   } catch (error) {
@@ -18,19 +18,18 @@ router.get('/', async (req, res) => {
 // POST /api/accounts - Create a new account
 router.post('/', async (req, res) => {
   try {
-    const { name, type, category, subcategoryId, description } = req.body;
+    const { name, type, categoryId, description } = req.body;
     
     const account = new Account({
       name,
       type,
-      category,
-      subcategoryId: subcategoryId || undefined,
+      categoryId,
       description
     });
     
     const savedAccount = await account.save();
     const populatedAccount = await Account.findById(savedAccount._id)
-      .populate('subcategoryId', 'name parentCategory');
+      .populate('categoryId', 'name type');
     res.status(201).json(populatedAccount);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -40,19 +39,18 @@ router.post('/', async (req, res) => {
 // PUT /api/accounts/:id - Update an account
 router.put('/:id', async (req, res) => {
   try {
-    const { name, type, category, subcategoryId, description } = req.body;
+    const { name, type, categoryId, description } = req.body;
     
     const account = await Account.findByIdAndUpdate(
       req.params.id,
       { 
         name, 
         type, 
-        category, 
-        subcategoryId: subcategoryId || undefined, 
+        categoryId, 
         description 
       },
       { new: true, runValidators: true }
-    ).populate('subcategoryId', 'name parentCategory');
+    ).populate('categoryId', 'name type');
     
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });

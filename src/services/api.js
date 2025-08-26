@@ -45,22 +45,22 @@ export const entriesAPI = {
   getTotals: () => api.get('/entries/analytics/totals')
 }
 
-// Subcategory API calls
-export const subcategoriesAPI = {
-  // Get all subcategories
-  getAll: () => api.get('/subcategories'),
+// Category API calls
+export const categoriesAPI = {
+  // Get all categories
+  getAll: () => api.get('/categories'),
   
-  // Get subcategories by parent category
-  getByParent: (parentCategory) => api.get(`/subcategories/${parentCategory}`),
+  // Get categories by type
+  getByType: (type) => api.get(`/categories/${type}`),
   
-  // Create a new subcategory
-  create: (subcategoryData) => api.post('/subcategories', subcategoryData),
+  // Create a new category
+  create: (categoryData) => api.post('/categories', categoryData),
   
-  // Update a subcategory
-  update: (id, subcategoryData) => api.put(`/subcategories/${id}`, subcategoryData),
+  // Update a category
+  update: (id, categoryData) => api.put(`/categories/${id}`, categoryData),
   
-  // Delete a subcategory
-  delete: (id) => api.delete(`/subcategories/${id}`)
+  // Delete a category
+  delete: (id) => api.delete(`/categories/${id}`)
 }
 
 // Health check

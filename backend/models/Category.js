@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
-const subcategorySchema = new mongoose.Schema({
+const categorySchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
     trim: true
   },
-  parentCategory: {
+  type: {
     type: String,
     required: true,
     enum: ['deposits', 'investments']
@@ -19,7 +19,7 @@ const subcategorySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Ensure unique subcategory names within each parent category
-subcategorySchema.index({ name: 1, parentCategory: 1 }, { unique: true });
+// Ensure unique category names within each type
+categorySchema.index({ name: 1, type: 1 }, { unique: true });
 
-module.exports = mongoose.model('Subcategory', subcategorySchema);
+module.exports = mongoose.model('Category', categorySchema);

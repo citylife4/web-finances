@@ -11,14 +11,10 @@ const accountSchema = new mongoose.Schema({
     required: true,
     enum: ['deposits', 'investments']
   },
-  category: {
-    type: String,
-    required: true
-  },
-  subcategoryId: {
+  categoryId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Subcategory',
-    required: false
+    ref: 'Category',
+    required: true
   },
   description: {
     type: String,

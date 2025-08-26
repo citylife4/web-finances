@@ -1,34 +1,17 @@
 import { reactive } from 'vue'
-import { accountsAPI, entriesAPI, subcategoriesAPI } from '../services/api'
+import { accountsAPI, entriesAPI, categoriesAPI } from '../services/api'
 
-// Account types and categories
+// Account types
 export const ACCOUNT_TYPES = {
   DEPOSITS: 'deposits',
   INVESTMENTS: 'investments'
 }
 
-export const DEPOSIT_CATEGORIES = [
-  'Checking Account',
-  'Savings Account',
-  'Money Market',
-  'Certificate of Deposit (CD)',
-  'High Yield Savings'
-]
-
-export const INVESTMENT_CATEGORIES = [
-  'Stock Portfolio',
-  'Funds',
-  'ETFs',
-  'Bonds',
-  'Crypto',
-  'Crypto',
-]
-
 // Application store
 export const store = reactive({
   accounts: [],
   monthlyEntries: [],
-  subcategories: [],
+  categories: [],
   loading: false,
   error: null,
   
@@ -219,77 +202,77 @@ export const store = reactive({
       await Promise.all([
         this.loadAccounts(),
         this.loadEntries(),
-        this.loadSubcategories()
+        this.loadCategories()
       ])
     } catch (error) {
       this.setError('Failed to initialize application: ' + error.message)
     }
   },
 
-  // Subcategory management
-  async loadSubcategories() {
+  // Category management
+  async loadCategories() {
     try {
       this.setLoading(true)
       this.clearError()
-      const response = await subcategoriesAPI.getAll()
-      this.subcategories = response.data
+      const response = await categoriesAPI.getAll()
+      this.categories = response.data
     } catch (error) {
-      this.setError('Failed to load subcategories: ' + error.message)
+      this.setError('Failed to load categories: ' + error.message)
       throw error
     } finally {
       this.setLoading(false)
     }
   },
 
-  async addSubcategory(subcategory) {
+  async addCategory(category) {
     try {
       this.setLoading(true)
       this.clearError()
-      const response = await subcategoriesAPI.create(subcategory)
-      this.subcategories.push(response.data)
+      const response = await categoriesAPI.create(category)
+      this.categories.push(response.data)
       return response.data
     } catch (error) {
-      this.setError('Failed to add subcategory: ' + error.message)
+      this.setError('Failed to add category: ' + error.message)
       throw error
     } finally {
       this.setLoading(false)
     }
   },
 
-  async updateSubcategory(id, updates) {
+  async updateCategory(id, updates) {
     try {
       this.setLoading(true)
       this.clearError()
-      const response = await subcategoriesAPI.update(id, updates)
-      const index = this.subcategories.findIndex(sub => sub._id === id)
+      const response = await categoriesAPI.update(id, updates)
+      const index = this.categories.findIndex(cat => cat._id === id)
       if (index !== -1) {
-        this.subcategories[index] = response.data
+        this.categories[index] = response.data
       }
       return response.data
     } catch (error) {
-      this.setError('Failed to update subcategory: ' + error.message)
+      this.setError('Failed to update category: ' + error.message)
       throw error
     } finally {
       this.setLoading(false)
     }
   },
 
-  async deleteSubcategory(id) {
+  async deleteCategory(id) {
     try {
       this.setLoading(true)
       this.clearError()
-      await subcategoriesAPI.delete(id)
-      this.subcategories = this.subcategories.filter(sub => sub._id !== id)
+      await categoriesAPI.delete(id)
+      this.categories = this.categories.filter(cat => cat._id !== id)
     } catch (error) {
-      this.setError('Failed to delete subcategory: ' + error.message)
+      this.setError('Failed to delete category: ' + error.message)
       throw error
     } finally {
       this.setLoading(false)
     }
   },
 
-  getSubcategoriesByParent(parentCategory) {
-    return this.subcategories.filter(sub => sub.parentCategory === parentCategory)
+  getCategoriesByType(type) {
+    return this.categories.filter(cat => cat.type === type)
   }
 })
 
