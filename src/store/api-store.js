@@ -17,14 +17,11 @@ export const DEPOSIT_CATEGORIES = [
 
 export const INVESTMENT_CATEGORIES = [
   'Stock Portfolio',
-  'Mutual Funds',
+  'Funds',
   'ETFs',
   'Bonds',
-  '401(k)',
-  'IRA',
-  'Roth IRA',
   'Crypto',
-  'Real Estate'
+  'Crypto',
 ]
 
 // Application store

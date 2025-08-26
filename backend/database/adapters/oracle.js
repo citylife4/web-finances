@@ -338,6 +338,49 @@ class OracleAdapter extends BaseAdapter {
       updatedAt: row[5]
     };
   }
+  async updateEntry(id, updates) {
+    const { amount } = updates;
+    
+    // Update the entry
+    const updateResult = await this.connection.execute(
+      `UPDATE monthly_entries 
+       SET amount = :amount 
+       WHERE id = :id`,
+      { id, amount }
+    );
+    
+    if (updateResult.rowsAffected === 0) {
+      return null;
+    }
+    
+    await this.connection.commit();
+    
+    // Return the updated entry with populated account
+    const result = await this.connection.execute(
+      `SELECT e.id, e.account_id, e.month, e.amount, e.created_at, e.updated_at,
+              a.id as account_id_2, a.name, a.type, a.category, a.description
+       FROM monthly_entries e
+       JOIN accounts a ON e.account_id = a.id
+       WHERE e.id = :id`,
+      { id }
+    );
+    
+    const row = result.rows[0];
+    return {
+      _id: row[0],
+      accountId: {
+        _id: row[6],
+        name: row[7],
+        type: row[8],
+        category: row[9],
+        description: row[10]
+      },
+      month: row[2],
+      amount: row[3],
+      createdAt: row[4],
+      updatedAt: row[5]
+    };
+  }
 
   async deleteEntry(id) {
     const entryResult = await this.connection.execute(

@@ -6,6 +6,7 @@ A Vue.js application for tracking your financial accounts and monitoring wealth 
 
 - **Account Management**: Add and organize deposit and investment accounts with categories
 - **Monthly Entries**: Record account balances on a monthly basis
+- **XLSX Import**: Import financial data from Excel files with reverse table format
 - **Dashboard**: Visualize your wealth progression with interactive charts
 - **Database Support**: Choose between MongoDB or Oracle Autonomous Database
 - **REST API**: Backend API built with Express.js with database abstraction layer
@@ -121,7 +122,8 @@ For detailed Docker documentation, see [DOCKER.md](./DOCKER.md).
 
 1. **Add Accounts**: Go to "Manage Accounts" to add your deposit and investment accounts
 2. **Monthly Entries**: Use "Monthly Entry" to record your account balances each month
-3. **Dashboard**: View your financial progression and account breakdowns on the main dashboard
+3. **Import Data**: Use "Import Data" to bulk import from XLSX files (see [XLSX Import Guide](./docs/XLSX_IMPORT.md))
+4. **Dashboard**: View your financial progression and account breakdowns on the main dashboard
 
 ## 🏗️ Architecture
 

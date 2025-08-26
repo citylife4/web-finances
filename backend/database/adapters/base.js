@@ -36,6 +36,10 @@ class BaseAdapter {
     throw new Error('createOrUpdateEntry() method must be implemented');
   }
 
+  async updateEntry(id, updates) {
+    throw new Error('updateEntry() method must be implemented');
+  }
+
   async deleteEntry(id) {
     throw new Error('deleteEntry() method must be implemented');
   }

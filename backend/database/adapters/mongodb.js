@@ -97,6 +97,17 @@ class MongoAdapter extends BaseAdapter {
     ).populate('accountId');
   }
 
+  async updateEntry(id, updates) {
+    if (!this.connected) {
+      throw new Error('Database not connected');
+    }
+    return await MonthlyEntry.findByIdAndUpdate(
+      id,
+      updates,
+      { new: true, runValidators: true }
+    ).populate('accountId');
+  }
+
   async deleteEntry(id) {
     if (!this.connected) {
       throw new Error('Database not connected');

@@ -95,7 +95,7 @@
               <p v-if="account.description" class="account-description">{{ account.description }}</p>
               <div class="account-stats">
                 <span class="latest-value">
-                  Latest: ${{ formatCurrency(getLatestValue(account._id)) }}
+                  Latest: {{ formatCurrency(getLatestValue(account._id)) }}
                 </span>
               </div>
             </div>
@@ -122,7 +122,7 @@
               <p v-if="account.description" class="account-description">{{ account.description }}</p>
               <div class="account-stats">
                 <span class="latest-value">
-                  Latest: ${{ formatCurrency(getLatestValue(account._id)) }}
+                  Latest: {{ formatCurrency(getLatestValue(account._id)) }}
                 </span>
               </div>
             </div>
@@ -285,7 +285,7 @@ export default {
     }
 
     const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('en-US').format(amount)
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
     }
 
     return {

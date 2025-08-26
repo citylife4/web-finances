@@ -51,7 +51,7 @@
                 <p class="account-category">{{ account.category }}</p>
               </div>
               <div class="amount-input">
-                <label :for="`amount-${account._id}`">Amount ($)</label>
+                <label :for="`amount-${account._id}`">Amount (€)</label>
                 <input
                   :id="`amount-${account._id}`"
                   v-model.number="accountValues[account._id]"
@@ -62,7 +62,7 @@
                 />
               </div>
               <div class="previous-value" v-if="getPreviousValue(account._id)">
-                Previous: ${{ formatCurrency(getPreviousValue(account._id)) }}
+                Previous: {{ formatCurrency(getPreviousValue(account._id)) }}
               </div>
             </div>
           </div>
@@ -82,7 +82,7 @@
                 <p class="account-category">{{ account.category }}</p>
               </div>
               <div class="amount-input">
-                <label :for="`amount-${account._id}`">Amount ($)</label>
+                <label :for="`amount-${account._id}`">Amount (€)</label>
                 <input
                   :id="`amount-${account._id}`"
                   v-model.number="accountValues[account._id]"
@@ -93,7 +93,7 @@
                 />
               </div>
               <div class="previous-value" v-if="getPreviousValue(account._id)">
-                Previous: ${{ formatCurrency(getPreviousValue(account._id)) }}
+                Previous: {{ formatCurrency(getPreviousValue(account._id)) }}
               </div>
             </div>
           </div>
@@ -105,15 +105,15 @@
           <div class="summary-grid">
             <div class="summary-item deposits">
               <span class="label">Total Deposits:</span>
-              <span class="value">${{ formatCurrency(totalDepositsEntry) }}</span>
+              <span class="value">{{ formatCurrency(totalDepositsEntry) }}</span>
             </div>
             <div class="summary-item investments">
               <span class="label">Total Investments:</span>
-              <span class="value">${{ formatCurrency(totalInvestmentsEntry) }}</span>
+              <span class="value">{{ formatCurrency(totalInvestmentsEntry) }}</span>
             </div>
             <div class="summary-item total">
               <span class="label">Total Net Worth:</span>
-              <span class="value">${{ formatCurrency(totalNetWorthEntry) }}</span>
+              <span class="value">{{ formatCurrency(totalNetWorthEntry) }}</span>
             </div>
           </div>
         </div>
@@ -248,7 +248,7 @@ export default {
     }
 
     const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('en-US').format(amount)
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
     }
 
     // Watch for month changes to load existing entries
