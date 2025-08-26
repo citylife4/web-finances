@@ -60,19 +60,19 @@
         <canvas ref="breakdownChart"></canvas>
       </div>
 
-      <div class="chart-container" v-if="subcategoryBreakdown.length > 0">
-        <h3>Subcategory Breakdown</h3>
-        <canvas ref="subcategoryChart"></canvas>
+      <div class="chart-container" v-if="categoryBreakdown.length > 0">
+        <h3>Category Breakdown</h3>
+        <canvas ref="categoryChart"></canvas>
       </div>
     </div>
 
-    <!-- Subcategory Insights -->
-    <div v-if="subcategoryInsights.length > 0" class="subcategory-insights">
-      <h3>Subcategory Analysis</h3>
+    <!-- Category Insights -->
+    <div v-if="categoryInsights.length > 0" class="category-insights">
+      <h3>Category Analysis</h3>
       <div class="insights-grid">
         <div 
-          v-for="insight in subcategoryInsights" 
-          :key="insight.subcategoryId || 'no-subcategory'"
+          v-for="insight in categoryInsights" 
+          :key="insight.categoryId || 'no-category'"
           class="insight-card"
         >
           <div class="insight-header">
@@ -127,10 +127,10 @@ export default {
   setup() {
     const progressionChart = ref(null)
     const breakdownChart = ref(null)
-    const subcategoryChart = ref(null)
+    const categoryChart = ref(null)
     let progressionChartInstance = null
     let breakdownChartInstance = null
-    let subcategoryChartInstance = null
+    let categoryChartInstance = null
 
     const totalDeposits = computed(() => {
       try {
@@ -161,28 +161,28 @@ export default {
         .slice(0, 5)
     )
 
-    const subcategoryBreakdown = computed(() => {
+    const categoryBreakdown = computed(() => {
       const breakdown = []
       
-      // Group accounts by subcategory
-      const subcategoryGroups = {}
+      // Group accounts by category
+      const categoryGroups = {}
       
       store.accounts.forEach(account => {
-        if (account.subcategoryId) {
-          const key = account.subcategoryId._id
-          if (!subcategoryGroups[key]) {
-            subcategoryGroups[key] = {
-              subcategory: account.subcategoryId,
+        if (account.categoryId) {
+          const key = account.categoryId._id
+          if (!categoryGroups[key]) {
+            categoryGroups[key] = {
+              category: account.categoryId,
               accounts: [],
               total: 0
             }
           }
-          subcategoryGroups[key].accounts.push(account)
+          categoryGroups[key].accounts.push(account)
         }
       })
       
-      // Calculate totals for each subcategory
-      Object.values(subcategoryGroups).forEach(group => {
+      // Calculate totals for each category
+      Object.values(categoryGroups).forEach(group => {
         group.accounts.forEach(account => {
           const latestEntry = store.monthlyEntries
             .filter(entry => {
@@ -196,8 +196,8 @@ export default {
         
         if (group.total > 0) {
           breakdown.push({
-            name: group.subcategory.name,
-            parentCategory: group.subcategory.parentCategory,
+            name: group.category.name,
+            type: group.category.type,
             total: group.total,
             accountCount: group.accounts.length
           })
@@ -207,67 +207,22 @@ export default {
       return breakdown.sort((a, b) => b.total - a.total)
     })
 
-    const subcategoryInsights = computed(() => {
+    const categoryInsights = computed(() => {
       const insights = []
       
-      // Add insights for subcategories
-      subcategoryBreakdown.value.forEach(item => {
-        const parentTotal = item.parentCategory === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
+      // Add insights for categories
+      categoryBreakdown.value.forEach(item => {
+        const parentTotal = item.type === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
         const percentage = parentTotal > 0 ? ((item.total / parentTotal) * 100).toFixed(1) : 0
         
         insights.push({
           name: item.name,
-          parentType: item.parentCategory === ACCOUNT_TYPES.DEPOSITS ? 'Deposits' : 'Investments',
+          parentType: item.type === ACCOUNT_TYPES.DEPOSITS ? 'Deposits' : 'Investments',
           total: item.total,
           percentage,
           accountCount: item.accountCount
         })
       })
-      
-      // Add insight for accounts without subcategories
-      const accountsWithoutSubcategory = store.accounts.filter(account => !account.subcategoryId)
-      if (accountsWithoutSubcategory.length > 0) {
-        let depositsWithoutSub = 0
-        let investmentsWithoutSub = 0
-        
-        accountsWithoutSubcategory.forEach(account => {
-          const latestEntry = store.monthlyEntries
-            .filter(entry => {
-              const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-              return entryAccountId === account._id
-            })
-            .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
-          
-          const amount = latestEntry ? latestEntry.amount : 0
-          if (account.type === ACCOUNT_TYPES.DEPOSITS) {
-            depositsWithoutSub += amount
-          } else {
-            investmentsWithoutSub += amount
-          }
-        })
-        
-        if (depositsWithoutSub > 0) {
-          const percentage = totalDeposits.value > 0 ? ((depositsWithoutSub / totalDeposits.value) * 100).toFixed(1) : 0
-          insights.push({
-            name: 'Uncategorized Deposits',
-            parentType: 'Deposits',
-            total: depositsWithoutSub,
-            percentage,
-            accountCount: accountsWithoutSubcategory.filter(acc => acc.type === ACCOUNT_TYPES.DEPOSITS).length
-          })
-        }
-        
-        if (investmentsWithoutSub > 0) {
-          const percentage = totalInvestments.value > 0 ? ((investmentsWithoutSub / totalInvestments.value) * 100).toFixed(1) : 0
-          insights.push({
-            name: 'Uncategorized Investments',
-            parentType: 'Investments', 
-            total: investmentsWithoutSub,
-            percentage,
-            accountCount: accountsWithoutSubcategory.filter(acc => acc.type === ACCOUNT_TYPES.INVESTMENTS).length
-          })
-        }
-      }
       
       return insights.sort((a, b) => b.total - a.total)
     })
@@ -397,16 +352,16 @@ export default {
       })
     }
 
-    const createSubcategoryChart = () => {
-      if (subcategoryChartInstance) {
-        subcategoryChartInstance.destroy()
+    const createCategoryChart = () => {
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy()
       }
 
-      if (subcategoryBreakdown.value.length === 0) return
+      if (categoryBreakdown.value.length === 0) return
 
-      const ctx = subcategoryChart.value.getContext('2d')
+      const ctx = categoryChart.value.getContext('2d')
       
-      // Generate different colors for each subcategory
+      // Generate different colors for each category
       const colors = [
         '#667eea', '#764ba2', '#f093fb', '#f5576c', 
         '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
@@ -414,13 +369,13 @@ export default {
         '#fad0c4', '#ffd1ff', '#c2e9fb', '#a1c4fd'
       ]
 
-      subcategoryChartInstance = new Chart(ctx, {
+      categoryChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: subcategoryBreakdown.value.map(item => item.name),
+          labels: categoryBreakdown.value.map(item => item.name),
           datasets: [{
-            data: subcategoryBreakdown.value.map(item => item.total),
-            backgroundColor: colors.slice(0, subcategoryBreakdown.value.length),
+            data: categoryBreakdown.value.map(item => item.total),
+            backgroundColor: colors.slice(0, categoryBreakdown.value.length),
             borderWidth: 2,
             borderColor: '#fff'
           }]
@@ -432,10 +387,10 @@ export default {
             tooltip: {
               callbacks: {
                 label: function(context) {
-                  const item = subcategoryBreakdown.value[context.dataIndex]
-                  const parentTotal = item.parentCategory === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
+                  const item = categoryBreakdown.value[context.dataIndex]
+                  const parentTotal = item.type === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
                   const percentage = parentTotal > 0 ? ((context.parsed / parentTotal) * 100).toFixed(1) : 0
-                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${item.parentCategory})`
+                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${item.type})`
                 }
               }
             },
@@ -454,7 +409,7 @@ export default {
     onMounted(async () => {
       await createProgressionChart()
       createBreakdownChart()
-      createSubcategoryChart()
+      createCategoryChart()
     })
 
     return {
@@ -463,11 +418,11 @@ export default {
       totalInvestments,
       totalNetWorth,
       recentEntries,
-      subcategoryBreakdown,
-      subcategoryInsights,
+      categoryBreakdown,
+      categoryInsights,
       progressionChart,
       breakdownChart,
-      subcategoryChart,
+      categoryChart,
       formatCurrency,
       formatMonth,
       getAccountName
@@ -641,8 +596,8 @@ export default {
   margin-bottom: 1rem;
 }
 
-/* Subcategory Insights */
-.subcategory-insights {
+/* Category Insights */
+.category-insights {
   background: white;
   border-radius: 15px;
   padding: 2rem;
@@ -650,7 +605,7 @@ export default {
   margin-bottom: 3rem;
 }
 
-.subcategory-insights h3 {
+.category-insights h3 {
   margin-top: 0;
   margin-bottom: 1.5rem;
   color: #333;
