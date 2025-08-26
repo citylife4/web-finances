@@ -59,6 +59,37 @@
         <h3>Assets Breakdown</h3>
         <canvas ref="breakdownChart"></canvas>
       </div>
+
+      <div class="chart-container" v-if="subcategoryBreakdown.length > 0">
+        <h3>Subcategory Breakdown</h3>
+        <canvas ref="subcategoryChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Subcategory Insights -->
+    <div v-if="subcategoryInsights.length > 0" class="subcategory-insights">
+      <h3>Subcategory Analysis</h3>
+      <div class="insights-grid">
+        <div 
+          v-for="insight in subcategoryInsights" 
+          :key="insight.subcategoryId || 'no-subcategory'"
+          class="insight-card"
+        >
+          <div class="insight-header">
+            <h4>{{ insight.name }}</h4>
+            <span class="parent-type">{{ insight.parentType }}</span>
+          </div>
+          <div class="insight-amount">
+            {{ formatCurrency(insight.total) }}
+          </div>
+          <div class="insight-percentage">
+            {{ insight.percentage }}% of {{ insight.parentType }}
+          </div>
+          <div class="insight-accounts">
+            {{ insight.accountCount }} account{{ insight.accountCount !== 1 ? 's' : '' }}
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Recent Entries -->
@@ -96,8 +127,10 @@ export default {
   setup() {
     const progressionChart = ref(null)
     const breakdownChart = ref(null)
+    const subcategoryChart = ref(null)
     let progressionChartInstance = null
     let breakdownChartInstance = null
+    let subcategoryChartInstance = null
 
     const totalDeposits = computed(() => {
       try {
@@ -127,6 +160,117 @@ export default {
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5)
     )
+
+    const subcategoryBreakdown = computed(() => {
+      const breakdown = []
+      
+      // Group accounts by subcategory
+      const subcategoryGroups = {}
+      
+      store.accounts.forEach(account => {
+        if (account.subcategoryId) {
+          const key = account.subcategoryId._id
+          if (!subcategoryGroups[key]) {
+            subcategoryGroups[key] = {
+              subcategory: account.subcategoryId,
+              accounts: [],
+              total: 0
+            }
+          }
+          subcategoryGroups[key].accounts.push(account)
+        }
+      })
+      
+      // Calculate totals for each subcategory
+      Object.values(subcategoryGroups).forEach(group => {
+        group.accounts.forEach(account => {
+          const latestEntry = store.monthlyEntries
+            .filter(entry => {
+              const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+              return entryAccountId === account._id
+            })
+            .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+          
+          group.total += latestEntry ? latestEntry.amount : 0
+        })
+        
+        if (group.total > 0) {
+          breakdown.push({
+            name: group.subcategory.name,
+            parentCategory: group.subcategory.parentCategory,
+            total: group.total,
+            accountCount: group.accounts.length
+          })
+        }
+      })
+      
+      return breakdown.sort((a, b) => b.total - a.total)
+    })
+
+    const subcategoryInsights = computed(() => {
+      const insights = []
+      
+      // Add insights for subcategories
+      subcategoryBreakdown.value.forEach(item => {
+        const parentTotal = item.parentCategory === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
+        const percentage = parentTotal > 0 ? ((item.total / parentTotal) * 100).toFixed(1) : 0
+        
+        insights.push({
+          name: item.name,
+          parentType: item.parentCategory === ACCOUNT_TYPES.DEPOSITS ? 'Deposits' : 'Investments',
+          total: item.total,
+          percentage,
+          accountCount: item.accountCount
+        })
+      })
+      
+      // Add insight for accounts without subcategories
+      const accountsWithoutSubcategory = store.accounts.filter(account => !account.subcategoryId)
+      if (accountsWithoutSubcategory.length > 0) {
+        let depositsWithoutSub = 0
+        let investmentsWithoutSub = 0
+        
+        accountsWithoutSubcategory.forEach(account => {
+          const latestEntry = store.monthlyEntries
+            .filter(entry => {
+              const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+              return entryAccountId === account._id
+            })
+            .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+          
+          const amount = latestEntry ? latestEntry.amount : 0
+          if (account.type === ACCOUNT_TYPES.DEPOSITS) {
+            depositsWithoutSub += amount
+          } else {
+            investmentsWithoutSub += amount
+          }
+        })
+        
+        if (depositsWithoutSub > 0) {
+          const percentage = totalDeposits.value > 0 ? ((depositsWithoutSub / totalDeposits.value) * 100).toFixed(1) : 0
+          insights.push({
+            name: 'Uncategorized Deposits',
+            parentType: 'Deposits',
+            total: depositsWithoutSub,
+            percentage,
+            accountCount: accountsWithoutSubcategory.filter(acc => acc.type === ACCOUNT_TYPES.DEPOSITS).length
+          })
+        }
+        
+        if (investmentsWithoutSub > 0) {
+          const percentage = totalInvestments.value > 0 ? ((investmentsWithoutSub / totalInvestments.value) * 100).toFixed(1) : 0
+          insights.push({
+            name: 'Uncategorized Investments',
+            parentType: 'Investments', 
+            total: investmentsWithoutSub,
+            percentage,
+            accountCount: accountsWithoutSubcategory.filter(acc => acc.type === ACCOUNT_TYPES.INVESTMENTS).length
+          })
+        }
+      }
+      
+      return insights.sort((a, b) => b.total - a.total)
+    })
 
     const formatCurrency = (amount) => {
       return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
@@ -253,9 +397,64 @@ export default {
       })
     }
 
+    const createSubcategoryChart = () => {
+      if (subcategoryChartInstance) {
+        subcategoryChartInstance.destroy()
+      }
+
+      if (subcategoryBreakdown.value.length === 0) return
+
+      const ctx = subcategoryChart.value.getContext('2d')
+      
+      // Generate different colors for each subcategory
+      const colors = [
+        '#667eea', '#764ba2', '#f093fb', '#f5576c', 
+        '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
+        '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3',
+        '#fad0c4', '#ffd1ff', '#c2e9fb', '#a1c4fd'
+      ]
+
+      subcategoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: subcategoryBreakdown.value.map(item => item.name),
+          datasets: [{
+            data: subcategoryBreakdown.value.map(item => item.total),
+            backgroundColor: colors.slice(0, subcategoryBreakdown.value.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const item = subcategoryBreakdown.value[context.dataIndex]
+                  const parentTotal = item.parentCategory === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
+                  const percentage = parentTotal > 0 ? ((context.parsed / parentTotal) * 100).toFixed(1) : 0
+                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${item.parentCategory})`
+                }
+              }
+            },
+            legend: {
+              position: 'bottom',
+              labels: {
+                padding: 20,
+                usePointStyle: true
+              }
+            }
+          }
+        }
+      })
+    }
+
     onMounted(async () => {
       await createProgressionChart()
       createBreakdownChart()
+      createSubcategoryChart()
     })
 
     return {
@@ -264,8 +463,11 @@ export default {
       totalInvestments,
       totalNetWorth,
       recentEntries,
+      subcategoryBreakdown,
+      subcategoryInsights,
       progressionChart,
       breakdownChart,
+      subcategoryChart,
       formatCurrency,
       formatMonth,
       getAccountName
@@ -439,6 +641,97 @@ export default {
   margin-bottom: 1rem;
 }
 
+/* Subcategory Insights */
+.subcategory-insights {
+  background: white;
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  margin-bottom: 3rem;
+}
+
+.subcategory-insights h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.insight-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 10px;
+  padding: 1.5rem;
+  border-left: 4px solid;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.insight-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.insight-card:nth-child(4n+1) {
+  border-left-color: #667eea;
+}
+
+.insight-card:nth-child(4n+2) {
+  border-left-color: #f093fb;
+}
+
+.insight-card:nth-child(4n+3) {
+  border-left-color: #4facfe;
+}
+
+.insight-card:nth-child(4n+4) {
+  border-left-color: #43e97b;
+}
+
+.insight-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.insight-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.parent-type {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.insight-amount {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.insight-percentage {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.insight-accounts {
+  color: #888;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 768px) {
   .charts-section {
     grid-template-columns: 1fr;
@@ -454,6 +747,10 @@ export default {
   
   .dashboard-header h2 {
     font-size: 2rem;
+  }
+  
+  .insights-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
