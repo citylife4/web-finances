@@ -2,7 +2,7 @@
 
 ## Overview
 
-The XLSX import feature allows you to import financial data from Excel files using a reverse table format where banks/wallets are rows and months/years are columns.
+The XLSX import feature allows you to import financial data from Excel files using a tabular format where each row represents an account with its type and monthly balance data.
 
 ## File Format Requirements
 
@@ -11,19 +11,17 @@ The XLSX import feature allows you to import financial data from Excel files usi
 Your XLSX file must follow this specific format:
 
 1. **First column**: Bank/Wallet names
-2. **Second row**: Account types (`deposits` or `investments`)
-3. **Third row**: Account categories (e.g., `Checking Account`, `401(k)`, `IRA`)
+2. **Second column**: Account type (`deposits` or `investments`)
+3. **Third column**: Account sub-type (e.g., `Checking Account`, `401(k)`, `IRA`)
 4. **Remaining columns**: Month/Year headers (e.g., `Jan/2023`, `Feb/2023`)
 
 ### Example Layout
 
-| Bank/Wallet     | Jan/2023 | Feb/2023 | Mar/2023 |
-|-----------------|----------|----------|----------|
-| **deposits**    | deposits | deposits | investments |
-| **Checking Account** | Checking Account | Savings Account | 401(k) |
-| Chase Bank      | 1500     | 1600     | 0        |
-| Wells Fargo     | 2500     | 2600     | 5000     |
-| Vanguard 401k   | 0        | 0        | 45000    |
+| Bank/Wallet | Type | Sub-type | Jan/2023 | Feb/2023 |
+|-------------|------|----------|----------|----------|
+| Bank A | deposits | Checking Account | 100 | 150 |
+| Bank B | investments | 401(k) | 200 | 250 |
+| Wallet X | deposits | Savings Account | 50 | 60 |
 
 ## Supported Date Formats
 
@@ -51,17 +49,18 @@ The importer supports various month/year formats:
 
 The importer validates:
 - File format (must be .xlsx or .xls)
-- Required rows and columns
+- Required header row
 - Date format parsing
 - Numeric values for amounts
-- Account type validation
+- Account type validation (must be 'deposits' or 'investments')
 
 ## Error Handling
 
 If there are issues with your file, you'll receive specific error messages indicating:
-- Missing required rows
+- Missing header row
 - Invalid date formats
 - Non-numeric amount values
+- Invalid account types
 - File format issues
 
 ## Security Note
@@ -74,5 +73,5 @@ If there are issues with your file, you'll receive specific error messages indic
 2. Ensure all amount values are numeric
 3. Use consistent date formatting across all columns
 4. Leave cells empty (not zero) for accounts that don't have balances in specific months
-5. Double-check account types are either "deposits" or "investments"
-6. Use standard category names that match your account management system
+5. Use account types "deposits" or "investments" only
+6. Use descriptive sub-type names that match your account management system

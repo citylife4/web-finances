@@ -2,7 +2,7 @@
   <div class="import-data">
     <div class="page-header">
       <h2>Import Data from XLSX</h2>
-      <p class="subtitle">Import financial data from Excel files with reverse table format</p>
+      <p class="subtitle">Import financial data from Excel files with tabular format</p>
     </div>
 
     <!-- Instructions Card -->
@@ -12,12 +12,12 @@
         <p><strong>Required XLSX format:</strong></p>
         <ul>
           <li><strong>First column:</strong> Bank/Wallet names</li>
-          <li><strong>Second row:</strong> Account types (deposits, investments)</li>
-          <li><strong>Third row:</strong> Account categories (e.g., Checking Account, 401(k))</li>
+          <li><strong>Second column:</strong> Account type (deposits, investments)</li>
+          <li><strong>Third column:</strong> Account sub-type (e.g., Checking Account, 401(k))</li>
           <li><strong>Remaining columns:</strong> Months/Years (e.g., Jan/2023, Feb/2023)</li>
         </ul>
         <p class="example-note">
-          💡 <strong>Example:</strong> Each cell represents the balance for that bank/wallet in that month.
+          💡 <strong>Example:</strong> Each row represents an account with its type and monthly balances.
         </p>
         <div class="example-actions">
           <button @click="downloadExample" class="btn btn-secondary">
@@ -31,31 +31,33 @@
           <thead>
             <tr>
               <th>Bank/Wallet</th>
+              <th>Type</th>
+              <th>Sub-type</th>
               <th>Jan/2023</th>
               <th>Feb/2023</th>
-              <th>Mar/2023</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>deposits</strong></td>
-              <td colspan="3" class="type-row">Account Type Row</td>
+              <td>Bank A</td>
+              <td>deposits</td>
+              <td>Checking Account</td>
+              <td>100</td>
+              <td>150</td>
             </tr>
             <tr>
-              <td><strong>Checking Account</strong></td>
-              <td colspan="3" class="category-row">Category Row</td>
+              <td>Bank B</td>
+              <td>investments</td>
+              <td>401(k)</td>
+              <td>200</td>
+              <td>250</td>
             </tr>
             <tr>
-              <td>Chase Bank</td>
-              <td>1500</td>
-              <td>1600</td>
-              <td>1700</td>
-            </tr>
-            <tr>
-              <td>Wells Fargo</td>
-              <td>2500</td>
-              <td>2600</td>
-              <td>2700</td>
+              <td>Wallet X</td>
+              <td>deposits</td>
+              <td>Savings Account</td>
+              <td>50</td>
+              <td>60</td>
             </tr>
           </tbody>
         </table>
@@ -297,8 +299,8 @@ export default {
         // Convert to JSON with header row
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
         
-        if (jsonData.length < 3) {
-          throw new Error('File must have at least 3 rows (header, type row, category row)')
+        if (jsonData.length < 2) {
+          throw new Error('File must have at least 2 rows (header row and data rows)')
         }
         
         const parsedData = this.parseReverseTableData(jsonData)
@@ -313,41 +315,57 @@ export default {
     },
     
     parseReverseTableData(jsonData) {
-      // Extract headers (months/years) from first row, skipping first column
-      const headers = jsonData[0].slice(1).filter(header => header && header.trim())
+      // Extract headers (months/years) from first row, skipping first 3 columns (Bank/Wallet, Type, Sub-type)
+      const headers = jsonData[0].slice(3).filter(header => header && header.trim())
       
       if (headers.length === 0) {
         throw new Error('No month/year columns found')
       }
       
-      // Extract type row (second row)
-      const typeRow = jsonData[1]
-      if (!typeRow || typeRow.length < 2) {
-        throw new Error('Type row (row 2) is missing or incomplete')
-      }
-      
-      // Extract category row (third row)  
-      const categoryRow = jsonData[2]
-      if (!categoryRow || categoryRow.length < 2) {
-        throw new Error('Category row (row 3) is missing or incomplete')
-      }
-      
       const accounts = []
       const entries = []
       
-      // Process data rows (starting from row 4, index 3)
-      for (let rowIndex = 3; rowIndex < jsonData.length; rowIndex++) {
+      // Process data rows (starting from row 2, index 1)
+      for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
         const row = jsonData[rowIndex]
         const accountName = row[0]
+        const accountType = row[1]
+        const accountCategory = row[2]
         
         if (!accountName || accountName.trim() === '') {
           continue // Skip empty rows
         }
         
-        // Get type and category for this account (from columns 1 and onwards)
-        // For each month column, we need to determine its type and category
-        for (let colIndex = 1; colIndex < row.length && colIndex <= headers.length; colIndex++) {
-          const monthHeader = headers[colIndex - 1]
+        if (!accountType || !accountCategory) {
+          continue // Skip rows without type or category
+        }
+        
+        // Validate account type
+        const normalizedType = accountType.trim().toLowerCase()
+        if (normalizedType !== 'deposits' && normalizedType !== 'investments') {
+          console.warn(`Invalid account type '${accountType}' for account '${accountName}'. Must be 'deposits' or 'investments'.`)
+          continue
+        }
+        
+        // Add account (check for duplicates)
+        let account = accounts.find(acc => 
+          acc.name === accountName.trim() && 
+          acc.type === normalizedType && 
+          acc.category === accountCategory.trim()
+        )
+        
+        if (!account) {
+          account = {
+            name: accountName.trim(),
+            type: normalizedType,
+            category: accountCategory.trim()
+          }
+          accounts.push(account)
+        }
+        
+        // Process monthly data (starting from column 3, index 3)
+        for (let colIndex = 3; colIndex < row.length && (colIndex - 3) < headers.length; colIndex++) {
+          const monthHeader = headers[colIndex - 3]
           const amount = row[colIndex]
           
           if (amount === undefined || amount === null || amount === '') {
@@ -359,39 +377,17 @@ export default {
             continue // Skip non-numeric values
           }
           
-          // Get type and category for this column
-          const type = typeRow[colIndex]
-          const category = categoryRow[colIndex]
-          
-          if (!type || !category) {
-            continue // Skip if type or category is missing
-          }
-          
           // Parse month/year
           const monthYear = this.parseMonthYear(monthHeader)
           if (!monthYear) {
             continue // Skip invalid dates
           }
           
-          // Check if account already exists in our list
-          let account = accounts.find(acc => 
-            acc.name === accountName.trim() && acc.type === type.trim() && acc.category === category.trim()
-          )
-          
-          if (!account) {
-            account = {
-              name: accountName.trim(),
-              type: type.trim().toLowerCase(),
-              category: category.trim()
-            }
-            accounts.push(account)
-          }
-          
           // Add entry
           entries.push({
             accountName: accountName.trim(),
-            accountType: type.trim().toLowerCase(),
-            accountCategory: category.trim(),
+            accountType: normalizedType,
+            accountCategory: accountCategory.trim(),
             month: monthYear,
             amount: numAmount
           })
