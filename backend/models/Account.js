@@ -15,6 +15,11 @@ const accountSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  subcategoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Subcategory',
+    required: false
+  },
   description: {
     type: String,
     trim: true

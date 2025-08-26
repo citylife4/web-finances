@@ -39,7 +39,12 @@
         <div class="form-row">
           <div class="form-group">
             <label for="accountCategory">Category</label>
-            <select id="accountCategory" v-model="newAccount.category" required>
+            <select 
+              id="accountCategory" 
+              v-model="newAccount.category" 
+              @change="newAccount.subcategoryId = ''"
+              required
+            >
               <option value="">Select Category</option>
               <option 
                 v-for="category in availableCategories" 
@@ -50,7 +55,27 @@
               </option>
             </select>
           </div>
-          
+
+          <div class="form-group">
+            <label for="accountSubcategory">Subcategory (Optional)</label>
+            <select 
+              id="accountSubcategory" 
+              v-model="newAccount.subcategoryId"
+              :disabled="!newAccount.type"
+            >
+              <option value="">No subcategory</option>
+              <option 
+                v-for="subcategory in availableSubcategories" 
+                :key="subcategory._id" 
+                :value="subcategory._id"
+              >
+                {{ subcategory.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">          
           <div class="form-group">
             <label for="accountDescription">Description (Optional)</label>
             <input
@@ -92,6 +117,9 @@
                 </div>
               </div>
               <p class="account-category">{{ account.category }}</p>
+              <p v-if="account.subcategoryId" class="account-subcategory">
+                📂 {{ account.subcategoryId.name }}
+              </p>
               <p v-if="account.description" class="account-description">{{ account.description }}</p>
               <div class="account-stats">
                 <span class="latest-value">
@@ -119,6 +147,9 @@
                 </div>
               </div>
               <p class="account-category">{{ account.category }}</p>
+              <p v-if="account.subcategoryId" class="account-subcategory">
+                📂 {{ account.subcategoryId.name }}
+              </p>
               <p v-if="account.description" class="account-description">{{ account.description }}</p>
               <div class="account-stats">
                 <span class="latest-value">
@@ -156,13 +187,36 @@
 
           <div class="form-group">
             <label for="editAccountCategory">Category</label>
-            <select id="editAccountCategory" v-model="editingAccount.category" required>
+            <select 
+              id="editAccountCategory" 
+              v-model="editingAccount.category" 
+              @change="editingAccount.subcategoryId = ''"
+              required
+            >
               <option 
                 v-for="category in getEditCategories" 
                 :key="category" 
                 :value="category"
               >
                 {{ category }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="editAccountSubcategory">Subcategory (Optional)</label>
+            <select 
+              id="editAccountSubcategory" 
+              v-model="editingAccount.subcategoryId"
+              :disabled="!editingAccount.type"
+            >
+              <option value="">No subcategory</option>
+              <option 
+                v-for="subcategory in getEditSubcategories" 
+                :key="subcategory._id" 
+                :value="subcategory._id"
+              >
+                {{ subcategory.name }}
               </option>
             </select>
           </div>
@@ -197,6 +251,7 @@ export default {
       name: '',
       type: '',
       category: '',
+      subcategoryId: '',
       description: ''
     })
 
@@ -220,6 +275,16 @@ export default {
       return []
     })
 
+    const availableSubcategories = computed(() => {
+      if (!newAccount.value.type) return []
+      return store.getSubcategoriesByParent(newAccount.value.type)
+    })
+
+    const getEditSubcategories = computed(() => {
+      if (!editingAccount.value?.type) return []
+      return store.getSubcategoriesByParent(editingAccount.value.type)
+    })
+
     const depositAccounts = computed(() => 
       store.accounts.filter(acc => acc.type === ACCOUNT_TYPES.DEPOSITS)
     )
@@ -239,6 +304,7 @@ export default {
           name: '',
           type: '',
           category: '',
+          subcategoryId: '',
           description: ''
         }
       } catch (error) {
@@ -295,6 +361,8 @@ export default {
       editingAccount,
       availableCategories,
       getEditCategories,
+      availableSubcategories,
+      getEditSubcategories,
       depositAccounts,
       investmentAccounts,
       addAccount,
@@ -529,6 +597,12 @@ export default {
   margin: 0.5rem 0;
   color: #666;
   font-weight: 500;
+}
+
+.account-subcategory {
+  margin: 0.25rem 0 0.5rem 0;
+  color: #888;
+  font-size: 0.9rem;
 }
 
 .account-description {

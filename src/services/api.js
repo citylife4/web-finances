@@ -45,6 +45,24 @@ export const entriesAPI = {
   getTotals: () => api.get('/entries/analytics/totals')
 }
 
+// Subcategory API calls
+export const subcategoriesAPI = {
+  // Get all subcategories
+  getAll: () => api.get('/subcategories'),
+  
+  // Get subcategories by parent category
+  getByParent: (parentCategory) => api.get(`/subcategories/${parentCategory}`),
+  
+  // Create a new subcategory
+  create: (subcategoryData) => api.post('/subcategories', subcategoryData),
+  
+  // Update a subcategory
+  update: (id, subcategoryData) => api.put(`/subcategories/${id}`, subcategoryData),
+  
+  // Delete a subcategory
+  delete: (id) => api.delete(`/subcategories/${id}`)
+}
+
 // Health check
 export const healthCheck = () => api.get('/health')
 
