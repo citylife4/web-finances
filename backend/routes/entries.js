@@ -61,7 +61,7 @@ router.post('/', async (req, res) => {
       }
 
       const numAmount = Number(amount);
-      if (isNaN(numAmount) || numAmount < 0) {
+      if (isNaN(numAmount)) {
         console.error(`Invalid amount at index ${i}:`, amount);
         return res.status(400).json({ error: `Invalid amount at index ${i}: ${amount}` });
       }

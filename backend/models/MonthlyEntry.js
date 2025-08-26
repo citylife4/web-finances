@@ -13,8 +13,7 @@ const monthlyEntrySchema = new mongoose.Schema({
   },
   amount: {
     type: Number,
-    required: true,
-    min: 0
+    required: true
   }
 }, {
   timestamps: true
