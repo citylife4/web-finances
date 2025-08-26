@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Database adapter validation script
-const DatabaseFactory = require('./database');
+const DatabaseFactory = require('../backend/database');
 
 async function testAdapters() {
   console.log('=== Testing Database Adapters ===\n');
