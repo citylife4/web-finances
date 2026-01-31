@@ -575,8 +575,6 @@ export default {
             accountMap.set(`${accountData.name}-${accountData.type}-${accountData.categoryName}`, account._id)
           }
         }
-          }
-        }
         
         // Then, create monthly entries
         const entries = []

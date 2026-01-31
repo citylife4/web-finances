@@ -8,12 +8,37 @@
 </template>
 
 <script>
+import { onMounted, onUnmounted } from 'vue'
 import NavBar from './components/NavBar.vue'
+import { store } from './store/api-store'
+import { setAccessToken } from './services/api'
 
 export default {
   name: 'App',
   components: {
     NavBar
+  },
+  setup() {
+    // Handle logout events from token refresh failures
+    const handleLogout = () => {
+      // Clear local state and redirect to login
+      console.log('Session expired, logging out...')
+      // You can add router navigation here when auth views are implemented
+    }
+
+    onMounted(() => {
+      // Initialize the store after Vue app is mounted
+      store.initialize()
+      
+      // Listen for auth logout events
+      window.addEventListener('auth:logout', handleLogout)
+    })
+
+    onUnmounted(() => {
+      window.removeEventListener('auth:logout', handleLogout)
+    })
+
+    return { store }
   }
 }
 </script>

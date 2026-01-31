@@ -128,7 +128,7 @@ For detailed Docker documentation, see [DOCKER.md](./DOCKER.md).
 
 ### Database
 - **MongoDB** for persistent data storage
-- **Collections**: accounts, monthlyentries
+- **Collections**: accounts, categories, monthlyentries
 - **Indexes** optimized for performance
 - **Schema validation** for data integrity
 
@@ -140,11 +140,21 @@ For detailed Docker documentation, see [DOCKER.md](./DOCKER.md).
 - `PUT /api/accounts/:id` - Update account
 - `DELETE /api/accounts/:id` - Delete account
 
+### Categories
+- `GET /api/categories` - Get all categories
+- `GET /api/categories/:type` - Get categories by type (deposits/investments)
+- `POST /api/categories` - Create a new category
+- `PUT /api/categories/:id` - Update a category
+- `DELETE /api/categories/:id` - Delete a category
+
 ### Monthly Entries
 - `GET /api/entries` - Get all entries
 - `POST /api/entries` - Create/update entries
 - `GET /api/entries/month/:month` - Get entries for specific month
 - `GET /api/entries/analytics/totals` - Get monthly totals for charts
+
+### Health Check
+- `GET /api/health` - Check API status
 
 ## 🔒 Data Security
 

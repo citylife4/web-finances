@@ -276,5 +276,5 @@ export const store = reactive({
   }
 })
 
-// Initialize store on load
-store.initialize()
+// Note: Don't auto-initialize here to avoid race conditions
+// Call store.initialize() from App.vue or main.js after Vue app is mounted

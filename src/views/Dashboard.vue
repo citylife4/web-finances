@@ -115,7 +115,7 @@
 </template>
 
 <script>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { store, ACCOUNT_TYPES } from '../store/api-store'
 import { format } from 'date-fns'
@@ -131,6 +131,22 @@ export default {
     let progressionChartInstance = null
     let breakdownChartInstance = null
     let categoryChartInstance = null
+
+    // Cleanup function to destroy all chart instances
+    const destroyCharts = () => {
+      if (progressionChartInstance) {
+        progressionChartInstance.destroy()
+        progressionChartInstance = null
+      }
+      if (breakdownChartInstance) {
+        breakdownChartInstance.destroy()
+        breakdownChartInstance = null
+      }
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy()
+        categoryChartInstance = null
+      }
+    }
 
     const totalDeposits = computed(() => {
       try {
@@ -410,6 +426,11 @@ export default {
       await createProgressionChart()
       createBreakdownChart()
       createCategoryChart()
+    })
+
+    // Clean up chart instances to prevent memory leaks
+    onUnmounted(() => {
+      destroyCharts()
     })
 
     return {
