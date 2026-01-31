@@ -26,7 +26,7 @@
             <select 
               id="accountType" 
               v-model="newAccount.type" 
-              @change="newAccount.category = ''"
+              @change="newAccount.categoryId = ''"
               required
             >
               <option value="">Select Type</option>
@@ -39,18 +39,25 @@
         <div class="form-row">
           <div class="form-group">
             <label for="accountCategory">Category</label>
-            <select id="accountCategory" v-model="newAccount.category" required>
+            <select 
+              id="accountCategory" 
+              v-model="newAccount.categoryId" 
+              :disabled="!newAccount.type"
+              required
+            >
               <option value="">Select Category</option>
               <option 
                 v-for="category in availableCategories" 
-                :key="category" 
-                :value="category"
+                :key="category._id" 
+                :value="category._id"
               >
-                {{ category }}
+                {{ category.name }}
               </option>
             </select>
           </div>
-          
+        </div>
+
+        <div class="form-row">          
           <div class="form-group">
             <label for="accountDescription">Description (Optional)</label>
             <input
@@ -91,7 +98,9 @@
                   <button @click="deleteAccount(account._id)" class="btn-icon delete">🗑️</button>
                 </div>
               </div>
-              <p class="account-category">{{ account.category }}</p>
+              <p v-if="account.categoryId" class="account-category">
+                📂 {{ account.categoryId.name }}
+              </p>
               <p v-if="account.description" class="account-description">{{ account.description }}</p>
               <div class="account-stats">
                 <span class="latest-value">
@@ -118,7 +127,9 @@
                   <button @click="deleteAccount(account._id)" class="btn-icon delete">🗑️</button>
                 </div>
               </div>
-              <p class="account-category">{{ account.category }}</p>
+              <p v-if="account.categoryId" class="account-category">
+                📂 {{ account.categoryId.name }}
+              </p>
               <p v-if="account.description" class="account-description">{{ account.description }}</p>
               <div class="account-stats">
                 <span class="latest-value">
@@ -156,13 +167,19 @@
 
           <div class="form-group">
             <label for="editAccountCategory">Category</label>
-            <select id="editAccountCategory" v-model="editingAccount.category" required>
+            <select 
+              id="editAccountCategory" 
+              v-model="editingAccount.categoryId" 
+              :disabled="!editingAccount.type"
+              required
+            >
+              <option value="">Select Category</option>
               <option 
                 v-for="category in getEditCategories" 
-                :key="category" 
-                :value="category"
+                :key="category._id" 
+                :value="category._id"
               >
-                {{ category }}
+                {{ category.name }}
               </option>
             </select>
           </div>
@@ -188,7 +205,7 @@
 
 <script>
 import { ref, computed } from 'vue'
-import { store, ACCOUNT_TYPES, DEPOSIT_CATEGORIES, INVESTMENT_CATEGORIES } from '../store/api-store'
+import { store, ACCOUNT_TYPES } from '../store/api-store'
 
 export default {
   name: 'AccountManager',
@@ -196,28 +213,20 @@ export default {
     const newAccount = ref({
       name: '',
       type: '',
-      category: '',
+      categoryId: '',
       description: ''
     })
 
     const editingAccount = ref(null)
 
     const availableCategories = computed(() => {
-      if (newAccount.value.type === ACCOUNT_TYPES.DEPOSITS) {
-        return DEPOSIT_CATEGORIES
-      } else if (newAccount.value.type === ACCOUNT_TYPES.INVESTMENTS) {
-        return INVESTMENT_CATEGORIES
-      }
-      return []
+      if (!newAccount.value.type) return []
+      return store.getCategoriesByType(newAccount.value.type)
     })
 
     const getEditCategories = computed(() => {
-      if (editingAccount.value?.type === ACCOUNT_TYPES.DEPOSITS) {
-        return DEPOSIT_CATEGORIES
-      } else if (editingAccount.value?.type === ACCOUNT_TYPES.INVESTMENTS) {
-        return INVESTMENT_CATEGORIES
-      }
-      return []
+      if (!editingAccount.value?.type) return []
+      return store.getCategoriesByType(editingAccount.value.type)
     })
 
     const depositAccounts = computed(() => 
@@ -238,7 +247,7 @@ export default {
         newAccount.value = {
           name: '',
           type: '',
-          category: '',
+          categoryId: '',
           description: ''
         }
       } catch (error) {
@@ -248,12 +257,20 @@ export default {
     }
 
     const editAccount = (account) => {
-      editingAccount.value = { ...account }
+      editingAccount.value = {
+        ...account,
+        categoryId: account.categoryId?._id || ''
+      }
     }
 
     const updateAccount = async () => {
       try {
-        await store.updateAccount(editingAccount.value._id, editingAccount.value)
+        await store.updateAccount(editingAccount.value._id, {
+          name: editingAccount.value.name,
+          type: editingAccount.value.type,
+          categoryId: editingAccount.value.categoryId,
+          description: editingAccount.value.description
+        })
         editingAccount.value = null
       } catch (error) {
         console.error('Failed to update account:', error)
@@ -529,6 +546,12 @@ export default {
   margin: 0.5rem 0;
   color: #666;
   font-weight: 500;
+}
+
+.account-subcategory {
+  margin: 0.25rem 0 0.5rem 0;
+  color: #888;
+  font-size: 0.9rem;
 }
 
 .account-description {

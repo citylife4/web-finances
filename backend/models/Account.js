@@ -11,8 +11,9 @@ const accountSchema = new mongoose.Schema({
     required: true,
     enum: ['deposits', 'investments']
   },
-  category: {
-    type: String,
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
     required: true
   },
   description: {

@@ -3,6 +3,7 @@ import Dashboard from '../views/Dashboard.vue'
 import AccountManager from '../views/AccountManager.vue'
 import MonthlyEntry from '../views/MonthlyEntry.vue'
 import ImportData from '../views/ImportData.vue'
+import CategoryManager from '../views/CategoryManager.vue'
 
 const routes = [
   {
@@ -14,6 +15,11 @@ const routes = [
     path: '/accounts',
     name: 'AccountManager',
     component: AccountManager
+  },
+  {
+    path: '/categories',
+    name: 'CategoryManager',
+    component: CategoryManager
   },
   {
     path: '/entry',

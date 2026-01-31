@@ -13,11 +13,11 @@
         <ul>
           <li><strong>First column:</strong> Bank/Wallet names</li>
           <li><strong>Second column:</strong> Account type (deposits, investments)</li>
-          <li><strong>Third column:</strong> Account sub-type (e.g., Checking Account, 401(k))</li>
+          <li><strong>Third column:</strong> Category name (e.g., Checking Account, 401(k), Emergency Fund)</li>
           <li><strong>Remaining columns:</strong> Months/Years (e.g., Jan/2023, Feb/2023)</li>
         </ul>
         <p class="example-note">
-          💡 <strong>Example:</strong> Each row represents an account with its type and monthly balances.
+          💡 <strong>Smart Import:</strong> If a category in the third column doesn't exist, it will be automatically created for the specified account type.
         </p>
         <div class="example-actions">
           <button @click="downloadExample" class="btn btn-secondary">
@@ -32,7 +32,7 @@
             <tr>
               <th>Bank/Wallet</th>
               <th>Type</th>
-              <th>Sub-type</th>
+              <th>Category</th>
               <th>Jan/2023</th>
               <th>Feb/2023</th>
             </tr>
@@ -48,19 +48,31 @@
             <tr>
               <td>Bank B</td>
               <td>investments</td>
-              <td>401(k)</td>
+              <td>Stock Portfolio</td>
               <td>200</td>
               <td>250</td>
             </tr>
             <tr>
-              <td>Wallet X</td>
+              <td>Bank C</td>
               <td>deposits</td>
-              <td>Savings Account</td>
+              <td>Emergency Fund</td>
               <td>50</td>
               <td>60</td>
             </tr>
+            <tr>
+              <td>Brokerage X</td>
+              <td>investments</td>
+              <td>401k Rollover</td>
+              <td>300</td>
+              <td>320</td>
+            </tr>
           </tbody>
         </table>
+        <p class="example-explanation">
+          <small>
+            <strong>Note:</strong> All categories will be created automatically if they don't exist.
+          </small>
+        </p>
       </div>
     </div>
 
@@ -154,7 +166,7 @@
                 <tr v-for="account in previewData.accounts" :key="account.name">
                   <td>{{ account.name }}</td>
                   <td>{{ account.type }}</td>
-                  <td>{{ account.category }}</td>
+                  <td>{{ account.categoryName }}</td>
                   <td>
                     <span class="status-badge" :class="account.exists ? 'existing' : 'new'">
                       {{ account.exists ? 'Existing' : 'New' }}
@@ -336,14 +348,14 @@ export default {
         const row = jsonData[rowIndex]
         const accountName = row[0]
         const accountType = row[1]
-        const accountCategory = row[2]
+        const subTypeOrCategory = row[2]
         
         if (!accountName || accountName.trim() === '') {
           continue // Skip empty rows
         }
         
-        if (!accountType || !accountCategory) {
-          continue // Skip rows without type or category
+        if (!accountType || !subTypeOrCategory) {
+          continue // Skip rows without type or sub-type/category
         }
         
         // Validate account type
@@ -353,18 +365,21 @@ export default {
           continue
         }
         
+        // Determine category name from third column
+        const categoryName = subTypeOrCategory.trim()
+        
         // Add account (check for duplicates)
         let account = accounts.find(acc => 
           acc.name === accountName.trim() && 
           acc.type === normalizedType && 
-          acc.category === accountCategory.trim()
+          acc.categoryName === categoryName
         )
         
         if (!account) {
           account = {
             name: accountName.trim(),
             type: normalizedType,
-            category: accountCategory.trim()
+            categoryName: categoryName
           }
           accounts.push(account)
         }
@@ -393,7 +408,7 @@ export default {
           entries.push({
             accountName: accountName.trim(),
             accountType: normalizedType,
-            accountCategory: accountCategory.trim(),
+            categoryName: categoryName,
             month: monthYear,
             amount: numAmount
           })
@@ -453,8 +468,8 @@ export default {
     },
     
     async preparePreviewData(parsedData) {
-      // Load existing accounts to check which ones already exist
-      await store.loadAccounts()
+      // Load existing accounts and categories to check which ones already exist
+      await Promise.all([store.loadAccounts(), store.loadCategories()])
       
       const existingAccounts = store.accounts
       
@@ -464,7 +479,9 @@ export default {
         exists: existingAccounts.some(existing => 
           existing.name.toLowerCase() === account.name.toLowerCase() &&
           existing.type === account.type &&
-          existing.category === account.category
+          // Check if the category matches
+          (existing.categoryId && 
+           store.categories.find(cat => cat._id === existing.categoryId._id)?.name === account.categoryName)
         )
       }))
       
@@ -485,7 +502,41 @@ export default {
       this.clearError()
       
       try {
-        // First, create/update accounts
+        // First, create categories if needed
+        const categoryMap = new Map() // Map category names to IDs
+        
+        for (const accountData of this.previewData.accounts) {
+          if (accountData.categoryName && !accountData.exists) {
+            const categoryKey = `${accountData.categoryName}-${accountData.type}`
+            
+            if (!categoryMap.has(categoryKey)) {
+              // Check if category already exists
+              let existingCategory = store.categories.find(cat => 
+                cat.name === accountData.categoryName && 
+                cat.type === accountData.type
+              )
+              
+              if (!existingCategory) {
+                // Create new category
+                try {
+                  existingCategory = await store.addCategory({
+                    name: accountData.categoryName,
+                    type: accountData.type,
+                    description: `Imported from XLSX`
+                  })
+                  console.log('Created category:', existingCategory)
+                } catch (error) {
+                  console.warn(`Failed to create category '${accountData.categoryName}':`, error)
+                  continue
+                }
+              }
+              
+              categoryMap.set(categoryKey, existingCategory._id)
+            }
+          }
+        }
+        
+        // Then, create/update accounts
         const accountMap = new Map() // Map account names to IDs
         
         for (const accountData of this.previewData.accounts) {
@@ -496,19 +547,32 @@ export default {
             account = store.accounts.find(existing =>
               existing.name.toLowerCase() === accountData.name.toLowerCase() &&
               existing.type === accountData.type &&
-              existing.category === accountData.category
+              // Check category match
+              (existing.categoryId && 
+               store.categories.find(cat => cat._id === existing.categoryId._id)?.name === accountData.categoryName)
             )
           } else {
             // Create new account
-            account = await store.addAccount({
+            const categoryKey = `${accountData.categoryName}-${accountData.type}`
+            const categoryId = categoryMap.get(categoryKey)
+            
+            if (!categoryId) {
+              console.warn(`No category ID found for ${accountData.categoryName}`)
+              continue
+            }
+            
+            const accountPayload = {
               name: accountData.name,
               type: accountData.type,
-              category: accountData.category
-            })
+              categoryId: categoryId
+            }
+            
+            account = await store.addAccount(accountPayload)
+            console.log('Created account:', account)
           }
           
           if (account && account._id) {
-            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.category}`, account._id)
+            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.categoryName}`, account._id)
           }
         }
         
@@ -516,7 +580,7 @@ export default {
         const entries = []
         
         for (const entryData of this.previewData.entries) {
-          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.accountCategory}`
+          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.categoryName}`
           const accountId = accountMap.get(accountKey)
           
           if (accountId) {
@@ -532,7 +596,16 @@ export default {
           await store.saveMonthlyEntries(entries)
         }
         
-        this.successMessage = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
+        // Count created categories
+        const createdCategoriesCount = categoryMap.size
+        const createdAccountsCount = this.previewData.accounts.filter(acc => !acc.exists).length
+        
+        let successMsg = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
+        if (createdCategoriesCount > 0) {
+          successMsg += ` Created ${createdCategoriesCount} new categories.`
+        }
+        
+        this.successMessage = successMsg
         this.clearPreview()
         
       } catch (error) {
@@ -644,6 +717,13 @@ export default {
 .example-table {
   overflow-x: auto;
   margin-top: 1.5rem;
+}
+
+.example-explanation {
+  margin-top: 0.75rem;
+  color: #666;
+  font-style: italic;
+  text-align: center;
 }
 
 .example-table table {
