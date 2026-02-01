@@ -26,9 +26,12 @@ export default {
       // You can add router navigation here when auth views are implemented
     }
 
-    onMounted(() => {
-      // Initialize the store after Vue app is mounted
-      store.initialize()
+    onMounted(async () => {
+      // Only initialize store if user is authenticated
+      const { authStore } = await import('./store/auth-store')
+      if (authStore.isAuthenticated) {
+        store.initialize()
+      }
       
       // Listen for auth logout events
       window.addEventListener('auth:logout', handleLogout)

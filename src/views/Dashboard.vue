@@ -423,6 +423,11 @@ export default {
     }
 
     onMounted(async () => {
+      // Ensure store is initialized (in case user navigates directly to dashboard)
+      if (store.accounts.length === 0 && store.categories.length === 0) {
+        await store.initialize()
+      }
+      
       await createProgressionChart()
       createBreakdownChart()
       createCategoryChart()
