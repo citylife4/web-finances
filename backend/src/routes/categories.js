@@ -1,30 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const { Category, Account } = require('../models');
+const { Category, CategoryType, Account } = require('../models');
 const { authenticate } = require('../middleware/auth');
 
 // Apply authentication to all routes
 router.use(authenticate);
 
-// GET /api/categories - Get all categories
+// GET /api/categories - Get all categories with type population
 router.get('/', async (req, res) => {
   try {
-    const categories = await Category.find().sort({ type: 1, name: 1 });
+    const categories = await Category.find()
+      .populate('typeId', 'name displayName color')
+      .sort({ typeId: 1, name: 1 });
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
 
-// GET /api/categories/:type - Get categories by type
-router.get('/:type', async (req, res) => {
+// GET /api/categories/type/:typeId - Get categories by type ID
+router.get('/type/:typeId', async (req, res) => {
   try {
-    const { type } = req.params;
-    if (!['deposits', 'investments'].includes(type)) {
-      return res.status(400).json({ error: 'Invalid category type' });
+    const { typeId } = req.params;
+    
+    // Verify the type exists
+    const categoryType = await CategoryType.findById(typeId);
+    if (!categoryType) {
+      return res.status(404).json({ error: 'Category type not found' });
     }
     
-    const categories = await Category.find({ type }).sort({ name: 1 });
+    const categories = await Category.find({ typeId })
+      .populate('typeId', 'name displayName color')
+      .sort({ name: 1 });
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// GET /api/categories/by-name/:typeName - Get categories by type name (backward compatibility)
+router.get('/by-name/:typeName', async (req, res) => {
+  try {
+    const { typeName } = req.params;
+    
+    // Find the type by name
+    const categoryType = await CategoryType.findOne({ name: typeName.toLowerCase() });
+    if (!categoryType) {
+      return res.status(404).json({ error: 'Category type not found' });
+    }
+    
+    const categories = await Category.find({ typeId: categoryType._id })
+      .populate('typeId', 'name displayName color')
+      .sort({ name: 1 });
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch categories' });
@@ -34,23 +61,27 @@ router.get('/:type', async (req, res) => {
 // POST /api/categories - Create a new category
 router.post('/', async (req, res) => {
   try {
-    const { name, type, description } = req.body;
+    const { name, typeId, description } = req.body;
     
-    if (!name || !type) {
-      return res.status(400).json({ error: 'Name and type are required' });
+    if (!name || !typeId) {
+      return res.status(400).json({ error: 'Name and typeId are required' });
     }
     
-    if (!['deposits', 'investments'].includes(type)) {
-      return res.status(400).json({ error: 'Type must be deposits or investments' });
+    // Verify the type exists
+    const categoryType = await CategoryType.findById(typeId);
+    if (!categoryType) {
+      return res.status(400).json({ error: 'Invalid category type' });
     }
     
     const category = new Category({
       name: name.trim(),
-      type,
+      typeId,
+      type: categoryType.name, // Keep for backward compatibility
       description: description?.trim()
     });
     
     const savedCategory = await category.save();
+    await savedCategory.populate('typeId', 'name displayName color');
     res.status(201).json(savedCategory);
   } catch (error) {
     if (error.code === 11000) {
@@ -66,22 +97,27 @@ router.post('/', async (req, res) => {
 // PUT /api/categories/:id - Update a category
 router.put('/:id', async (req, res) => {
   try {
-    const { name, type, description } = req.body;
-    
-    if (type && !['deposits', 'investments'].includes(type)) {
-      return res.status(400).json({ error: 'Type must be deposits or investments' });
-    }
+    const { name, typeId, description } = req.body;
     
     const updateData = {};
     if (name) updateData.name = name.trim();
-    if (type) updateData.type = type;
     if (description !== undefined) updateData.description = description?.trim();
+    
+    // If typeId is being changed, verify it exists and update the type field
+    if (typeId) {
+      const categoryType = await CategoryType.findById(typeId);
+      if (!categoryType) {
+        return res.status(400).json({ error: 'Invalid category type' });
+      }
+      updateData.typeId = typeId;
+      updateData.type = categoryType.name; // Keep for backward compatibility
+    }
     
     const category = await Category.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    );
+    ).populate('typeId', 'name displayName color');
     
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });

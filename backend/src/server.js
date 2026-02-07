@@ -83,6 +83,7 @@ app.use('/api/auth', authLimiter, require('./routes/auth'));
 app.use('/api/accounts', require('./routes/accounts'));
 app.use('/api/entries', require('./routes/entries'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/category-types', require('./routes/category-types'));
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
