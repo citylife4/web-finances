@@ -103,6 +103,22 @@
         <span class="file-name">📎 {{ selectedFile.name }}</span>
         <button @click="clearFile" class="btn btn-secondary btn-small">Remove</button>
       </div>
+
+      <!-- Sheet Selection -->
+      <div v-if="availableSheets.length > 1" class="sheet-selection">
+        <h4>📑 Select Sheet</h4>
+        <p class="sheet-info">Your file contains {{ availableSheets.length }} sheets. Please select one:</p>
+        <div class="sheet-list">
+          <button 
+            v-for="(sheet, index) in availableSheets" 
+            :key="index"
+            @click="selectSheet(sheet)"
+            :class="['sheet-button', { 'active': selectedSheet === sheet }]"
+          >
+            {{ sheet }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Progress Section -->
@@ -252,7 +268,10 @@ export default {
       previewData: null,
       activeTab: 'accounts',
       error: null,
-      successMessage: null
+      successMessage: null,
+      availableSheets: [],
+      selectedSheet: null,
+      workbookData: null
     }
   },
   methods: {
@@ -299,31 +318,70 @@ export default {
     async parseFile(file) {
       this.isProcessing = true
       this.previewData = null
+      this.availableSheets = []
+      this.selectedSheet = null
       
       try {
         const arrayBuffer = await file.arrayBuffer()
         const workbook = XLSX.read(arrayBuffer, { type: 'array' })
         
-        // Get the first worksheet
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
+        // Store workbook for later sheet selection
+        this.workbookData = workbook
+        this.availableSheets = workbook.SheetNames
         
-        // Convert to JSON with header row
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-        
-        if (jsonData.length < 2) {
-          throw new Error('File must have at least 2 rows (header row and data rows)')
+        // If only one sheet, auto-select it
+        if (this.availableSheets.length === 1) {
+          this.selectedSheet = this.availableSheets[0]
+          await this.processSelectedSheet()
+        } else {
+          // Multiple sheets - wait for user selection
+          this.isProcessing = false
         }
-        
-        const parsedData = this.parseReverseTableData(jsonData)
-        this.previewData = await this.preparePreviewData(parsedData)
         
       } catch (error) {
         console.error('Parse error:', error)
         this.error = `Failed to parse file: ${error.message}`
+        this.isProcessing = false
+      }
+    },
+    
+    async selectSheet(sheetName) {
+      this.selectedSheet = sheetName
+      this.isProcessing = true
+      this.clearError()
+      
+      try {
+        await this.processSelectedSheet()
+      } catch (error) {
+        console.error('Parse error:', error)
+        this.error = `Failed to parse sheet: ${error.message}`
       } finally {
         this.isProcessing = false
       }
+    },
+    
+    async processSelectedSheet() {
+      if (!this.workbookData || !this.selectedSheet) {
+        throw new Error('No sheet selected')
+      }
+      
+      const worksheet = this.workbookData.Sheets[this.selectedSheet]
+      
+      // Convert to JSON with header row
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      console.log('📊 Sheet data:', jsonData)
+      console.log('📊 Total rows:', jsonData.length)
+      console.log('📊 First row (headers):', jsonData[0])
+      console.log('📊 Second row (first data):', jsonData[1])
+      
+      if (jsonData.length < 2) {
+        throw new Error(`Selected sheet must have at least 2 rows (header row and data rows). Found ${jsonData.length} row(s).`)
+      }
+      
+      const parsedData = this.parseReverseTableData(jsonData)
+      console.log('📊 Parsed data:', parsedData)
+      this.previewData = await this.preparePreviewData(parsedData)
     },
     
     parseReverseTableData(jsonData) {
@@ -336,8 +394,11 @@ export default {
         .map(h => h.trim())
         .filter(h => h)
       
+      console.log('📋 Parsed headers:', headers)
+      console.log('📋 Headers count:', headers.length)
+      
       if (headers.length === 0) {
-        throw new Error('No month/year columns found')
+        throw new Error('No month/year columns found. Make sure your data has columns after the first 3 (Bank/Wallet, Type, Category).')
       }
       
       const accounts = []
@@ -350,11 +411,15 @@ export default {
         const accountType = row[1]
         const subTypeOrCategory = row[2]
         
+        console.log(`Row ${rowIndex}:`, { accountName, accountType, subTypeOrCategory, rowLength: row.length })
+        
         if (!accountName || accountName.trim() === '') {
+          console.log(`Skipping row ${rowIndex}: empty account name`)
           continue // Skip empty rows
         }
         
         if (!accountType || !subTypeOrCategory) {
+          console.log(`Skipping row ${rowIndex}: missing type or category`)
           continue // Skip rows without type or sub-type/category
         }
         
@@ -414,6 +479,10 @@ export default {
           })
         }
       }
+      
+      console.log('✅ Parsing complete:', { accountsCount: accounts.length, entriesCount: entries.length })
+      console.log('✅ Accounts:', accounts)
+      console.log('✅ Entries sample:', entries.slice(0, 5))
       
       return { accounts, entries }
     },
@@ -585,12 +654,17 @@ export default {
           
           if (accountId) {
             entries.push({
-              accountId,
+              accountId: String(accountId), // Ensure it's a string
               month: entryData.month,
               amount: entryData.amount
             })
+          } else {
+            console.warn(`No account ID found for entry:`, entryData)
           }
         }
+        
+        console.log('📊 Prepared entries for import:', entries)
+        console.log('📊 Total entries:', entries.length)
         
         if (entries.length > 0) {
           await store.saveMonthlyEntries(entries)
@@ -619,6 +693,9 @@ export default {
     clearFile() {
       this.selectedFile = null
       this.$refs.fileInput.value = ''
+      this.availableSheets = []
+      this.selectedSheet = null
+      this.workbookData = null
       this.clearPreview()
     },
     
@@ -1072,6 +1149,55 @@ export default {
 .btn-secondary:hover:not(:disabled) {
   background: #5a6268;
   transform: translateY(-2px);
+}
+
+/* Sheet Selection */
+.sheet-selection {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+}
+
+.sheet-selection h4 {
+  margin-top: 0;
+  color: #495057;
+  font-size: 1.1rem;
+}
+
+.sheet-info {
+  color: #6c757d;
+  margin-bottom: 1rem;
+}
+
+.sheet-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sheet-button {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  color: #495057;
+}
+
+.sheet-button:hover {
+  border-color: #667eea;
+  background: #f8f9ff;
+  transform: translateY(-2px);
+}
+
+.sheet-button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
 }
 
 /* Responsive Design */

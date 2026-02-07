@@ -43,10 +43,11 @@ router.post('/', async (req, res) => {
       .populate('categoryId', 'name type');
     res.status(201).json(populatedAccount);
   } catch (error) {
+    console.error('Error creating account:', error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Failed to create account' });
+    res.status(500).json({ error: 'Failed to create account', details: error.message });
   }
 });
 

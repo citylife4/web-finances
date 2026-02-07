@@ -13,8 +13,8 @@ const monthlyEntrySchema = new mongoose.Schema({
   },
   amount: {
     type: Number,
-    required: true,
-    min: [0, 'Amount cannot be negative']
+    required: true
+    // Negative amounts allowed for credit cards, loans, debts, etc.
   }
 }, {
   timestamps: true

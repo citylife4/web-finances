@@ -63,6 +63,7 @@
             <div v-if="editingCategory && editingCategory._id === category._id" class="edit-form">
               <form @submit.prevent="updateCategory">
                 <div class="form-group">
+                  <label>Category Name</label>
                   <input
                     v-model="editingCategory.name"
                     type="text"
@@ -71,6 +72,14 @@
                   />
                 </div>
                 <div class="form-group">
+                  <label>Category Type</label>
+                  <select v-model="editingCategory.type" required>
+                    <option :value="ACCOUNT_TYPES.DEPOSITS">Deposits</option>
+                    <option :value="ACCOUNT_TYPES.INVESTMENTS">Investments</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Description</label>
                   <input
                     v-model="editingCategory.description"
                     type="text"

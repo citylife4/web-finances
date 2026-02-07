@@ -14,19 +14,25 @@ app.set('trust proxy', 1);
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 300 : 500, // 300 in prod, 500 in dev
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for authenticated users on specific routes if needed
+    // This allows authenticated imports to proceed without hitting limits
+    return false;
+  }
 });
 
-// Apply rate limiting to all requests
+// Apply rate limiting to all requests (skip in development if needed)
 app.use(limiter);
 
 // More aggressive rate limiting for auth routes
+// Higher limit in development for easier testing
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 auth requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 10 : 50, // 10 in prod, 50 in dev
   message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,

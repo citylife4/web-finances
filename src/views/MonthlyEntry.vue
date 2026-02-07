@@ -48,7 +48,7 @@
             >
               <div class="account-info">
                 <h5>{{ account.name }}</h5>
-                <p class="account-category">{{ account.category }}</p>
+                <p class="account-category">{{ account.categoryId?.name || '' }}</p>
               </div>
               <div class="amount-input">
                 <label :for="`amount-${account._id}`">Amount (€)</label>
@@ -79,7 +79,7 @@
             >
               <div class="account-info">
                 <h5>{{ account.name }}</h5>
-                <p class="account-category">{{ account.category }}</p>
+                <p class="account-category">{{ account.categoryId?.name || '' }}</p>
               </div>
               <div class="amount-input">
                 <label :for="`amount-${account._id}`">Amount (€)</label>

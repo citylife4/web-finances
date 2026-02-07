@@ -64,9 +64,10 @@ router.post('/', async (req, res) => {
       }
 
       const numAmount = Number(amount);
-      if (isNaN(numAmount) || numAmount < 0) {
-        return res.status(400).json({ error: `Invalid or negative amount at index ${i}` });
+      if (isNaN(numAmount)) {
+        return res.status(400).json({ error: `Invalid amount at index ${i}. Must be a valid number.` });
       }
+      // Allow negative amounts for credit cards, loans, debts, etc.
 
       accountIds.add(accountId);
     }
@@ -121,9 +122,10 @@ router.put('/:id', async (req, res) => {
     }
     
     const numAmount = Number(amount);
-    if (isNaN(numAmount) || numAmount < 0) {
-      return res.status(400).json({ error: 'Amount must be a non-negative number' });
+    if (isNaN(numAmount)) {
+      return res.status(400).json({ error: 'Amount must be a valid number' });
     }
+    // Allow negative amounts for credit cards, loans, debts, etc.
     
     const entry = await MonthlyEntry.findByIdAndUpdate(
       req.params.id,

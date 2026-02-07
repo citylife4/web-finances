@@ -5,14 +5,13 @@ services:
     container_name: finance-tracker-mongo-dev
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-devpassword123}
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
       MONGO_INITDB_DATABASE: finance-tracker
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
       - mongodb_data_dev:/data/db
-      - ./mongo-init:/docker-entrypoint-initdb.d
     networks:
       - finance-tracker-dev
 
@@ -25,11 +24,8 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      MONGODB_URI: mongodb://${MONGO_USER:-admin}:${MONGO_PASSWORD:-devpassword123}@mongodb:27017/finance-tracker?authSource=admin
+      MONGODB_URI: mongodb://admin:password123@mongodb:27017/finance-tracker?authSource=admin
       PORT: 3001
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-not-for-production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-not-for-production}
-      CORS_ORIGINS: http://localhost:5173,http://localhost:3000
     ports:
       - "3001:3001"
     depends_on:

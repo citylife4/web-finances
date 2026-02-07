@@ -9,7 +9,7 @@ db.createCollection('accounts', {
   validator: {
     $jsonSchema: {
       bsonType: 'object',
-      required: ['name', 'type', 'category'],
+      required: ['name', 'type', 'categoryId'],
       properties: {
         name: {
           bsonType: 'string',
@@ -20,9 +20,9 @@ db.createCollection('accounts', {
           enum: ['deposits', 'investments'],
           description: 'Account type must be either deposits or investments'
         },
-        category: {
-          bsonType: 'string',
-          description: 'Account category is required and must be a string'
+        categoryId: {
+          bsonType: 'objectId',
+          description: 'Category ID is required and must be an ObjectId'
         },
         description: {
           bsonType: 'string',
