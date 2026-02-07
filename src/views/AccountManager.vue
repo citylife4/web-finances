@@ -25,13 +25,18 @@
             <label for="accountType">Account Type</label>
             <select 
               id="accountType" 
-              v-model="newAccount.type" 
+              v-model="newAccount.typeId" 
               @change="newAccount.categoryId = ''"
               required
             >
               <option value="">Select Type</option>
-              <option :value="ACCOUNT_TYPES.DEPOSITS">Deposits</option>
-              <option :value="ACCOUNT_TYPES.INVESTMENTS">Investments</option>
+              <option 
+                v-for="type in store.categoryTypes" 
+                :key="type._id"
+                :value="type._id"
+              >
+                {{ type.icon }} {{ type.displayName }}
+              </option>
             </select>
           </div>
         </div>
@@ -42,7 +47,7 @@
             <select 
               id="accountCategory" 
               v-model="newAccount.categoryId" 
-              :disabled="!newAccount.type"
+              :disabled="!newAccount.typeId"
               required
             >
               <option value="">Select Category</option>
@@ -82,43 +87,21 @@
       </div>
       
       <div v-else class="accounts-grid">
-        <!-- Deposits -->
-        <div class="account-type-section">
-          <h4 class="section-title deposits">💳 Deposit Accounts</h4>
+        <!-- Dynamic account type sections -->
+        <div 
+          v-for="categoryType in store.categoryTypes" 
+          :key="categoryType._id"
+          class="account-type-section"
+        >
+          <h4 class="section-title" :style="{ borderLeftColor: categoryType.color }">
+            {{ categoryType.icon }} {{ categoryType.displayName }} Accounts
+          </h4>
           <div class="accounts-list">
             <div 
-              v-for="account in depositAccounts" 
+              v-for="account in getAccountsByType(categoryType._id)" 
               :key="account._id"
-              class="account-card deposits"
-            >
-              <div class="account-header">
-                <h5>{{ account.name }}</h5>
-                <div class="account-actions">
-                  <button @click="editAccount(account)" class="btn-icon">✏️</button>
-                  <button @click="deleteAccount(account._id)" class="btn-icon delete">🗑️</button>
-                </div>
-              </div>
-              <p v-if="account.categoryId" class="account-category">
-                📂 {{ account.categoryId.name }}
-              </p>
-              <p v-if="account.description" class="account-description">{{ account.description }}</p>
-              <div class="account-stats">
-                <span class="latest-value">
-                  Latest: {{ formatCurrency(getLatestValue(account._id)) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Investments -->
-        <div class="account-type-section">
-          <h4 class="section-title investments">📈 Investment Accounts</h4>
-          <div class="accounts-list">
-            <div 
-              v-for="account in investmentAccounts" 
-              :key="account._id"
-              class="account-card investments"
+              class="account-card"
+              :style="{ borderLeftColor: categoryType.color }"
             >
               <div class="account-header">
                 <h5>{{ account.name }}</h5>
@@ -159,9 +142,14 @@
           
           <div class="form-group">
             <label for="editAccountType">Account Type</label>
-            <select id="editAccountType" v-model="editingAccount.type" required>
-              <option :value="ACCOUNT_TYPES.DEPOSITS">Deposits</option>
-              <option :value="ACCOUNT_TYPES.INVESTMENTS">Investments</option>
+            <select id="editAccountType" v-model="editingAccount.typeId" required>
+              <option 
+                v-for="type in store.categoryTypes" 
+                :key="type._id"
+                :value="type._id"
+              >
+                {{ type.icon }} {{ type.displayName }}
+              </option>
             </select>
           </div>
 
@@ -170,7 +158,7 @@
             <select 
               id="editAccountCategory" 
               v-model="editingAccount.categoryId" 
-              :disabled="!editingAccount.type"
+              :disabled="!editingAccount.typeId"
               required
             >
               <option value="">Select Category</option>
@@ -205,14 +193,14 @@
 
 <script>
 import { ref, computed } from 'vue'
-import { store, ACCOUNT_TYPES } from '../store/api-store'
+import { store } from '../store/api-store'
 
 export default {
   name: 'AccountManager',
   setup() {
     const newAccount = ref({
       name: '',
-      type: '',
+      typeId: '',
       categoryId: '',
       description: ''
     })
@@ -220,22 +208,21 @@ export default {
     const editingAccount = ref(null)
 
     const availableCategories = computed(() => {
-      if (!newAccount.value.type) return []
-      return store.getCategoriesByType(newAccount.value.type)
+      if (!newAccount.value.typeId) return []
+      return store.getCategoriesByTypeId(newAccount.value.typeId)
     })
 
     const getEditCategories = computed(() => {
-      if (!editingAccount.value?.type) return []
-      return store.getCategoriesByType(editingAccount.value.type)
+      if (!editingAccount.value?.typeId) return []
+      return store.getCategoriesByTypeId(editingAccount.value.typeId)
     })
 
-    const depositAccounts = computed(() => 
-      store.accounts.filter(acc => acc.type === ACCOUNT_TYPES.DEPOSITS)
-    )
-
-    const investmentAccounts = computed(() => 
-      store.accounts.filter(acc => acc.type === ACCOUNT_TYPES.INVESTMENTS)
-    )
+    const getAccountsByType = (typeId) => {
+      return store.accounts.filter(acc => {
+        const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
+        return accTypeId === typeId
+      })
+    }
 
     const addAccount = async () => {
       try {
@@ -246,7 +233,7 @@ export default {
         // Reset form
         newAccount.value = {
           name: '',
-          type: '',
+          typeId: '',
           categoryId: '',
           description: ''
         }
@@ -259,6 +246,7 @@ export default {
     const editAccount = (account) => {
       editingAccount.value = {
         ...account,
+        typeId: typeof account.typeId === 'string' ? account.typeId : account.typeId?._id || '',
         categoryId: account.categoryId?._id || ''
       }
     }
@@ -267,7 +255,7 @@ export default {
       try {
         await store.updateAccount(editingAccount.value._id, {
           name: editingAccount.value.name,
-          type: editingAccount.value.type,
+          typeId: editingAccount.value.typeId,
           categoryId: editingAccount.value.categoryId,
           description: editingAccount.value.description
         })
@@ -307,13 +295,11 @@ export default {
 
     return {
       store,
-      ACCOUNT_TYPES,
       newAccount,
       editingAccount,
       availableCategories,
       getEditCategories,
-      depositAccounts,
-      investmentAccounts,
+      getAccountsByType,
       addAccount,
       editAccount,
       updateAccount,
@@ -467,17 +453,12 @@ export default {
 .section-title {
   margin: 0;
   padding: 0.75rem 1rem;
+  padding-left: 1.5rem;
   border-radius: 8px;
+  border-left: 4px solid;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   font-size: 1.2rem;
-}
-
-.section-title.deposits {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.section-title.investments {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 }
 
 .accounts-list {
@@ -496,14 +477,6 @@ export default {
 
 .account-card:hover {
   transform: translateX(5px);
-}
-
-.account-card.deposits {
-  border-left-color: #f093fb;
-}
-
-.account-card.investments {
-  border-left-color: #4facfe;
 }
 
 .account-header {
