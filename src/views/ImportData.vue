@@ -12,7 +12,7 @@
         <p><strong>Required XLSX format:</strong></p>
         <ul>
           <li><strong>First column:</strong> Bank/Wallet names</li>
-          <li><strong>Second column:</strong> Account type (deposits, investments)</li>
+          <li><strong>Second column:</strong> Account type ({{ getAvailableTypeNames() }})</li>
           <li><strong>Third column:</strong> Category name (e.g., Checking Account, 401(k), Emergency Fund)</li>
           <li><strong>Remaining columns:</strong> Months/Years (e.g., Jan/2023, Feb/2023)</li>
         </ul>
@@ -275,6 +275,10 @@ export default {
     }
   },
   methods: {
+    getAvailableTypeNames() {
+      return store.categoryTypes.map(t => t.name).join(', ') || 'loading...'
+    },
+    
     handleDragOver(e) {
       e.preventDefault()
       this.isDragOver = true
@@ -423,10 +427,13 @@ export default {
           continue // Skip rows without type or sub-type/category
         }
         
-        // Validate account type
+        // Validate account type - find matching category type
         const normalizedType = accountType.trim().toLowerCase()
-        if (normalizedType !== 'deposits' && normalizedType !== 'investments') {
-          console.warn(`Invalid account type '${accountType}' for account '${accountName}'. Must be 'deposits' or 'investments'.`)
+        const matchingType = store.categoryTypes.find(t => t.name === normalizedType)
+        
+        if (!matchingType) {
+          const availableTypes = store.categoryTypes.map(t => t.name).join(', ')
+          console.warn(`Invalid account type '${accountType}' for account '${accountName}'. Must be one of: ${availableTypes}`)
           continue
         }
         
@@ -436,14 +443,15 @@ export default {
         // Add account (check for duplicates)
         let account = accounts.find(acc => 
           acc.name === accountName.trim() && 
-          acc.type === normalizedType && 
+          acc.typeName === normalizedType && 
           acc.categoryName === categoryName
         )
         
         if (!account) {
           account = {
             name: accountName.trim(),
-            type: normalizedType,
+            typeName: normalizedType,
+            typeId: matchingType._id,
             categoryName: categoryName
           }
           accounts.push(account)
@@ -472,7 +480,8 @@ export default {
           // Add entry
           entries.push({
             accountName: accountName.trim(),
-            accountType: normalizedType,
+            accountTypeName: normalizedType,
+            accountTypeId: matchingType._id,
             categoryName: categoryName,
             month: monthYear,
             amount: numAmount
@@ -545,13 +554,14 @@ export default {
       // Prepare accounts data with existence check
       const accounts = parsedData.accounts.map(account => ({
         ...account,
-        exists: existingAccounts.some(existing => 
-          existing.name.toLowerCase() === account.name.toLowerCase() &&
-          existing.type === account.type &&
-          // Check if the category matches
-          (existing.categoryId && 
-           store.categories.find(cat => cat._id === existing.categoryId._id)?.name === account.categoryName)
-        )
+        exists: existingAccounts.some(existing => {
+          const existingTypeId = typeof existing.typeId === 'string' ? existing.typeId : existing.typeId?._id
+          return existing.name.toLowerCase() === account.name.toLowerCase() &&
+            existingTypeId === account.typeId &&
+            // Check if the category matches
+            (existing.categoryId && 
+             store.categories.find(cat => cat._id === existing.categoryId._id)?.name === account.categoryName)
+        })
       }))
       
       // Get unique months
@@ -576,21 +586,22 @@ export default {
         
         for (const accountData of this.previewData.accounts) {
           if (accountData.categoryName && !accountData.exists) {
-            const categoryKey = `${accountData.categoryName}-${accountData.type}`
+            const categoryKey = `${accountData.categoryName}-${accountData.typeId}`
             
             if (!categoryMap.has(categoryKey)) {
               // Check if category already exists
-              let existingCategory = store.categories.find(cat => 
-                cat.name === accountData.categoryName && 
-                cat.type === accountData.type
-              )
+              let existingCategory = store.categories.find(cat => {
+                const catTypeId = typeof cat.typeId === 'string' ? cat.typeId : cat.typeId?._id
+                return cat.name === accountData.categoryName && 
+                  catTypeId === accountData.typeId
+              })
               
               if (!existingCategory) {
                 // Create new category
                 try {
                   existingCategory = await store.addCategory({
                     name: accountData.categoryName,
-                    type: accountData.type,
+                    typeId: accountData.typeId,
                     description: `Imported from XLSX`
                   })
                   console.log('Created category:', existingCategory)
@@ -613,16 +624,17 @@ export default {
           
           if (accountData.exists) {
             // Find existing account
-            account = store.accounts.find(existing =>
-              existing.name.toLowerCase() === accountData.name.toLowerCase() &&
-              existing.type === accountData.type &&
-              // Check category match
-              (existing.categoryId && 
-               store.categories.find(cat => cat._id === existing.categoryId._id)?.name === accountData.categoryName)
-            )
+            account = store.accounts.find(existing => {
+              const existingTypeId = typeof existing.typeId === 'string' ? existing.typeId : existing.typeId?._id
+              return existing.name.toLowerCase() === accountData.name.toLowerCase() &&
+                existingTypeId === accountData.typeId &&
+                // Check category match
+                (existing.categoryId && 
+                 store.categories.find(cat => cat._id === existing.categoryId._id)?.name === accountData.categoryName)
+            })
           } else {
             // Create new account
-            const categoryKey = `${accountData.categoryName}-${accountData.type}`
+            const categoryKey = `${accountData.categoryName}-${accountData.typeId}`
             const categoryId = categoryMap.get(categoryKey)
             
             if (!categoryId) {
@@ -632,7 +644,7 @@ export default {
             
             const accountPayload = {
               name: accountData.name,
-              type: accountData.type,
+              typeId: accountData.typeId,
               categoryId: categoryId
             }
             
@@ -641,7 +653,7 @@ export default {
           }
           
           if (account && account._id) {
-            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.categoryName}`, account._id)
+            accountMap.set(`${accountData.name}-${accountData.typeId}-${accountData.categoryName}`, account._id)
           }
         }
         
@@ -649,7 +661,7 @@ export default {
         const entries = []
         
         for (const entryData of this.previewData.entries) {
-          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.categoryName}`
+          const accountKey = `${entryData.accountName}-${entryData.accountTypeId}-${entryData.categoryName}`
           const accountId = accountMap.get(accountKey)
           
           if (accountId) {
