@@ -20,33 +20,30 @@
     <div v-if="!store.loading && !store.error">
       <!-- Summary Cards -->
       <div class="summary-cards">
-      <div class="card deposits">
-        <div class="card-header">
-          <h3>💳 Total Deposits</h3>
+        <!-- Dynamic type cards -->
+        <div 
+          v-for="categoryType in store.categoryTypes" 
+          :key="categoryType._id"
+          class="card"
+          :style="{ borderTopColor: categoryType.color }"
+        >
+          <div class="card-header">
+            <h3>{{ categoryType.icon }} Total {{ categoryType.displayName }}</h3>
+          </div>
+          <div class="card-amount">
+            {{ formatCurrency(getTotalByTypeId(categoryType._id)) }}
+          </div>
         </div>
-        <div class="card-amount">
-          {{ formatCurrency(totalDeposits) }}
-        </div>
-      </div>
       
-      <div class="card investments">
-        <div class="card-header">
-          <h3>📈 Total Investments</h3>
-        </div>
-        <div class="card-amount">
-          {{ formatCurrency(totalInvestments) }}
-        </div>
-      </div>
-      
-      <div class="card total">
-        <div class="card-header">
-          <h3>💎 Total Net Worth</h3>
-        </div>
-        <div class="card-amount">
-          {{ formatCurrency(totalNetWorth) }}
+        <div class="card total">
+          <div class="card-header">
+            <h3>💎 Total Net Worth</h3>
+          </div>
+          <div class="card-amount">
+            {{ formatCurrency(totalNetWorth) }}
+          </div>
         </div>
       </div>
-    </div>
 
     <!-- Charts Section -->
     <div class="charts-section">
@@ -117,7 +114,7 @@
 <script>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Chart, registerables } from 'chart.js'
-import { store, ACCOUNT_TYPES } from '../store/api-store'
+import { store } from '../store/api-store'
 import { format } from 'date-fns'
 
 Chart.register(...registerables)
@@ -148,27 +145,39 @@ export default {
       }
     }
 
-    const totalDeposits = computed(() => {
+    const getTotalByTypeId = (typeId) => {
       try {
-        return store.getTotalByType(ACCOUNT_TYPES.DEPOSITS)
+        return store.accounts
+          .filter(acc => {
+            const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
+            return accTypeId === typeId
+          })
+          .reduce((total, account) => {
+            const latestEntry = store.monthlyEntries
+              .filter(entry => {
+                const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+                return entryAccountId === account._id
+              })
+              .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+            return total + (latestEntry ? latestEntry.amount : 0)
+          }, 0)
       } catch (error) {
-        console.error('Error calculating total deposits:', error)
+        console.error('Error calculating total for type:', error)
         return 0
       }
-    })
+    }
     
-    const totalInvestments = computed(() => {
-      try {
-        return store.getTotalByType(ACCOUNT_TYPES.INVESTMENTS)
-      } catch (error) {
-        console.error('Error calculating total investments:', error)
-        return 0
-      }
+    const totalNetWorth = computed(() => {
+      return store.accounts.reduce((total, account) => {
+        const latestEntry = store.monthlyEntries
+          .filter(entry => {
+            const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+            return entryAccountId === account._id
+          })
+          .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+        return total + (latestEntry ? latestEntry.amount : 0)
+      }, 0)
     })
-    
-    const totalNetWorth = computed(() => 
-      totalDeposits.value + totalInvestments.value
-    )
 
     const recentEntries = computed(() => 
       store.monthlyEntries
@@ -213,7 +222,7 @@ export default {
         if (group.total > 0) {
           breakdown.push({
             name: group.category.name,
-            type: group.category.type,
+            typeId: group.category.typeId,
             total: group.total,
             accountCount: group.accounts.length
           })
@@ -228,12 +237,14 @@ export default {
       
       // Add insights for categories
       categoryBreakdown.value.forEach(item => {
-        const parentTotal = item.type === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
+        const typeId = typeof item.typeId === 'string' ? item.typeId : item.typeId?._id
+        const categoryType = store.categoryTypes.find(t => t._id === typeId)
+        const parentTotal = getTotalByTypeId(typeId)
         const percentage = parentTotal > 0 ? ((item.total / parentTotal) * 100).toFixed(1) : 0
         
         insights.push({
           name: item.name,
-          parentType: item.type === ACCOUNT_TYPES.DEPOSITS ? 'Deposits' : 'Investments',
+          parentType: categoryType?.displayName || 'Unknown',
           total: item.total,
           percentage,
           accountCount: item.accountCount
@@ -273,36 +284,42 @@ export default {
         if (monthlyTotals.length === 0) return
 
         const ctx = progressionChart.value.getContext('2d')
+        
+        // Create dynamic datasets for each category type
+        const datasets = [
+          {
+            label: 'Total Net Worth',
+            data: monthlyTotals.map(data => data.total),
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            fill: true,
+            tension: 0.4
+          }
+        ]
+        
+        // Add a dataset for each category type found in the data
+        const typeDatasets = {}
+        store.categoryTypes.forEach(type => {
+          typeDatasets[type.name] = {
+            label: type.displayName,
+            data: monthlyTotals.map(data => {
+              const typeData = data.typeBreakdown?.find(t => t.typeName === type.name)
+              return typeData ? typeData.total : 0
+            }),
+            borderColor: type.color,
+            backgroundColor: type.color + '20', // Add transparency
+            fill: false,
+            tension: 0.4
+          }
+        })
+        
+        datasets.push(...Object.values(typeDatasets))
+        
         progressionChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
           labels: monthlyTotals.map(data => format(new Date(data.month + '-01'), 'MMM yyyy')),
-          datasets: [
-            {
-              label: 'Total Net Worth',
-              data: monthlyTotals.map(data => data.total),
-              borderColor: '#667eea',
-              backgroundColor: 'rgba(102, 126, 234, 0.1)',
-              fill: true,
-              tension: 0.4
-            },
-            {
-              label: 'Deposits',
-              data: monthlyTotals.map(data => data.deposits),
-              borderColor: '#f093fb',
-              backgroundColor: 'rgba(240, 147, 251, 0.1)',
-              fill: false,
-              tension: 0.4
-            },
-            {
-              label: 'Investments',
-              data: monthlyTotals.map(data => data.investments),
-              borderColor: '#f5576c',
-              backgroundColor: 'rgba(245, 87, 108, 0.1)',
-              fill: false,
-              tension: 0.4
-            }
-          ]
+          datasets
         },
         options: {
           responsive: true,
@@ -341,13 +358,19 @@ export default {
       if (totalNetWorth.value === 0) return
 
       const ctx = breakdownChart.value.getContext('2d')
+      
+      // Get labels and data for each category type
+      const labels = store.categoryTypes.map(type => type.displayName)
+      const data = store.categoryTypes.map(type => getTotalByTypeId(type._id))
+      const colors = store.categoryTypes.map(type => type.color)
+      
       breakdownChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: ['Deposits', 'Investments'],
+          labels,
           datasets: [{
-            data: [totalDeposits.value, totalInvestments.value],
-            backgroundColor: ['#f093fb', '#f5576c'],
+            data,
+            backgroundColor: colors,
             borderWidth: 0
           }]
         },
@@ -404,9 +427,11 @@ export default {
               callbacks: {
                 label: function(context) {
                   const item = categoryBreakdown.value[context.dataIndex]
-                  const parentTotal = item.type === ACCOUNT_TYPES.DEPOSITS ? totalDeposits.value : totalInvestments.value
+                  const typeId = typeof item.typeId === 'string' ? item.typeId : item.typeId?._id
+                  const categoryType = store.categoryTypes.find(t => t._id === typeId)
+                  const parentTotal = getTotalByTypeId(typeId)
                   const percentage = parentTotal > 0 ? ((context.parsed / parentTotal) * 100).toFixed(1) : 0
-                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${item.type})`
+                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${categoryType?.displayName || 'Unknown'})`
                 }
               }
             },
@@ -440,8 +465,7 @@ export default {
 
     return {
       store,
-      totalDeposits,
-      totalInvestments,
+      getTotalByTypeId,
       totalNetWorth,
       recentEntries,
       categoryBreakdown,
@@ -493,6 +517,7 @@ export default {
 .card {
   background: white;
   border-radius: 15px;
+  border-top: 5px solid #667eea;
   padding: 2rem;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   transition: transform 0.3s;
@@ -502,16 +527,8 @@ export default {
   transform: translateY(-5px);
 }
 
-.card.deposits {
-  border-left: 5px solid #f093fb;
-}
-
-.card.investments {
-  border-left: 5px solid #f5576c;
-}
-
 .card.total {
-  border-left: 5px solid #667eea;
+  border-top-color: #667eea;
 }
 
 .card-header h3 {
