@@ -37,14 +37,22 @@
       <div class="entry-forms">
         <h3>Account Balances for {{ formatSelectedMonth }}</h3>
         
-        <!-- Deposit Accounts -->
-        <div v-if="depositAccounts.length > 0" class="account-section">
-          <h4 class="section-title deposits">💳 Deposit Accounts</h4>
+        <!-- Dynamic Account Type Sections -->
+        <div 
+          v-for="(group, typeId) in accountsByType" 
+          :key="typeId"
+          v-if="group.accounts.length > 0"
+          class="account-section"
+        >
+          <h4 class="section-title" :style="{ borderLeftColor: group.type.color }">
+            {{ group.type.icon }} {{ group.type.displayName }} Accounts
+          </h4>
           <div class="accounts-grid">
             <div
-              v-for="account in depositAccounts"
+              v-for="account in group.accounts"
               :key="account._id"
-              class="account-entry deposits"
+              class="account-entry"
+              :style="{ borderLeftColor: group.type.color }"
             >
               <div class="account-info">
                 <h5>{{ account.name }}</h5>
@@ -57,38 +65,6 @@
                   v-model.number="accountValues[account._id]"
                   type="number"
                   step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                />
-              </div>
-              <div class="previous-value" v-if="getPreviousValue(account._id)">
-                Previous: {{ formatCurrency(getPreviousValue(account._id)) }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Investment Accounts -->
-        <div v-if="investmentAccounts.length > 0" class="account-section">
-          <h4 class="section-title investments">📈 Investment Accounts</h4>
-          <div class="accounts-grid">
-            <div
-              v-for="account in investmentAccounts"
-              :key="account._id"
-              class="account-entry investments"
-            >
-              <div class="account-info">
-                <h5>{{ account.name }}</h5>
-                <p class="account-category">{{ account.categoryId?.name || '' }}</p>
-              </div>
-              <div class="amount-input">
-                <label :for="`amount-${account._id}`">Amount (€)</label>
-                <input
-                  :id="`amount-${account._id}`"
-                  v-model.number="accountValues[account._id]"
-                  type="number"
-                  step="0.01"
-                  min="0"
                   placeholder="0.00"
                 />
               </div>
@@ -103,13 +79,15 @@
         <div class="entry-summary">
           <h4>Summary for {{ formatSelectedMonth }}</h4>
           <div class="summary-grid">
-            <div class="summary-item deposits">
-              <span class="label">Total Deposits:</span>
-              <span class="value">{{ formatCurrency(totalDepositsEntry) }}</span>
-            </div>
-            <div class="summary-item investments">
-              <span class="label">Total Investments:</span>
-              <span class="value">{{ formatCurrency(totalInvestmentsEntry) }}</span>
+            <div 
+              v-for="(group, typeId) in accountsByType" 
+              :key="typeId"
+              v-if="group.accounts.length > 0"
+              class="summary-item"
+              :style="{ borderLeftColor: group.type.color }"
+            >
+              <span class="label">Total {{ group.type.displayName }}:</span>
+              <span class="value">{{ formatCurrency(getTotalByType(typeId)) }}</span>
             </div>
             <div class="summary-item total">
               <span class="label">Total Net Worth:</span>
@@ -137,7 +115,7 @@
 
 <script>
 import { ref, computed, watch } from 'vue'
-import { store, ACCOUNT_TYPES } from '../store/api-store'
+import { store } from '../store/api-store'
 import { format } from 'date-fns'
 
 export default {
@@ -149,33 +127,39 @@ export default {
 
     const currentMonth = new Date().toISOString().slice(0, 7)
 
-    const depositAccounts = computed(() => 
-      store.accounts.filter(acc => acc.type === ACCOUNT_TYPES.DEPOSITS)
-    )
-
-    const investmentAccounts = computed(() => 
-      store.accounts.filter(acc => acc.type === ACCOUNT_TYPES.INVESTMENTS)
-    )
+    // Dynamic account groupings by type
+    const accountsByType = computed(() => {
+      const grouped = {}
+      store.categoryTypes.forEach(type => {
+        grouped[type._id] = {
+          type: type,
+          accounts: store.accounts.filter(acc => {
+            const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
+            return accTypeId === type._id
+          })
+        }
+      })
+      return grouped
+    })
 
     const formatSelectedMonth = computed(() => {
       if (!selectedMonth.value) return ''
       return format(new Date(selectedMonth.value + '-01'), 'MMMM yyyy')
     })
 
-    const totalDepositsEntry = computed(() => {
-      return depositAccounts.value.reduce((total, account) => {
+    // Calculate totals by type
+    const getTotalByType = (typeId) => {
+      const group = accountsByType.value[typeId]
+      if (!group) return 0
+      return group.accounts.reduce((total, account) => {
         return total + (accountValues.value[account._id] || 0)
       }, 0)
-    })
-
-    const totalInvestmentsEntry = computed(() => {
-      return investmentAccounts.value.reduce((total, account) => {
-        return total + (accountValues.value[account._id] || 0)
-      }, 0)
-    })
+    }
 
     const totalNetWorthEntry = computed(() => {
-      return totalDepositsEntry.value + totalInvestmentsEntry.value
+      return store.accounts.reduce((total, account) => {
+        return total + (accountValues.value[account._id] || 0)
+      }, 0)
     })
 
     const hasAnyValue = computed(() => {
@@ -266,11 +250,9 @@ export default {
       currentMonth,
       accountValues,
       showSuccessMessage,
-      depositAccounts,
-      investmentAccounts,
+      accountsByType,
       formatSelectedMonth,
-      totalDepositsEntry,
-      totalInvestmentsEntry,
+      getTotalByType,
       totalNetWorthEntry,
       hasAnyValue,
       loadExistingEntries,
@@ -395,17 +377,12 @@ export default {
 .section-title {
   margin: 0 0 1rem 0;
   padding: 0.75rem 1rem;
+  padding-left: 1.5rem;
   border-radius: 8px;
+  border-left: 4px solid;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   font-size: 1.1rem;
-}
-
-.section-title.deposits {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.section-title.investments {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 }
 
 .accounts-grid {
@@ -419,14 +396,6 @@ export default {
   border-radius: 10px;
   border-left: 4px solid;
   background: #f8f9fa;
-}
-
-.account-entry.deposits {
-  border-left-color: #f093fb;
-}
-
-.account-entry.investments {
-  border-left-color: #4facfe;
 }
 
 .account-info {
@@ -502,15 +471,7 @@ export default {
   padding: 1rem;
   border-radius: 8px;
   background: white;
-  border-left: 4px solid;
-}
-
-.summary-item.deposits {
-  border-left-color: #f093fb;
-}
-
-.summary-item.investments {
-  border-left-color: #4facfe;
+  border-left: 4px solid #667eea;
 }
 
 .summary-item.total {
