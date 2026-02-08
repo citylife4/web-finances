@@ -14,20 +14,30 @@ export default defineConfig({
     minify: 'esbuild',
     // Disable source maps in production to reduce memory usage
     sourcemap: false,
+    // Reduce target for faster builds
+    target: 'es2015',
     // Remove console and debugger statements in production
     esbuild: {
-      drop: ['console', 'debugger']
+      drop: ['console', 'debugger'],
+      // Disable legal comments to reduce processing
+      legalComments: 'none'
     },
     // Reduce chunk size warnings threshold
     chunkSizeWarningLimit: 1000,
-    // Optimize chunks for better caching
+    // Limit worker threads for low-memory systems
+    commonjsOptions: {
+      transformMixedEsModules: true
+    },
+    // Optimize chunks for better caching with minimal memory
     rollupOptions: {
       output: {
         manualChunks: {
-          'vue-vendor': ['vue', 'vue-router'],
-          'chart-vendor': ['chart.js', 'vue-chartjs'],
-          'utils-vendor': ['axios', 'date-fns', 'xlsx']
-        }
+          'vendor': ['vue', 'vue-router']
+        },
+        // Reduce chunk size for lower memory usage
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     }
   }

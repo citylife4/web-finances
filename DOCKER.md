@@ -52,16 +52,45 @@ docker-compose -f docker-compose.yml -f docker-compose.lowmem.yml up -d --build
 
 **Build Tips:**
 - Build may take 2-5 minutes on 1 CPU systems
-- If build still fails, try building locally and pushing images to a registry
-- Ensure swap is enabled on your VPS (recommended: 1GB swap)
+- Ensure swap is enabled on your VPS (recommended: 1-2GB swap)
+- Monitor memory during build: `watch -n 1 free -m`
+
+**If build still fails or hangs:**
+
+1. **Stop all running containers first:**
+   ```bash
+   docker stop $(docker ps -aq)
+   ```
+
+2. **Build frontend separately (maximizes available memory):**
+   ```bash
+   make build-frontend-only
+   ```
+
+3. **Then build backend and start all services:**
+   ```bash
+   docker-compose -f docker-compose.yml build backend
+   docker-compose -f docker-compose.yml -f docker-compose.lowmem.yml up -d
+   ```
+
+**Alternative: Build locally and push to registry**
+If your VPS still can't handle the build, consider:
+1. Build images on a more powerful machine
+2. Push to Docker Hub or GitHub Container Registry
+3. Pull pre-built images on your VPS
 
 **Enable swap on Ubuntu/Debian:**
 ```bash
-sudo fallocate -l 1G /swapfile
+# Create 2GB swap file (recommended for 1GB RAM systems)
+sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# Verify swap is active
+free -h
+swapon --show
 ```
 
 ## 📁 File Structure

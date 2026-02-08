@@ -1,19 +1,20 @@
 # Makefile for Finance Tracker Docker Management
 
-.PHONY: help build up down dev prod prod-lowmem logs clean reset
+.PHONY: help build up down dev prod prod-lowmem build-frontend-only logs clean reset
 
 # Default target
 help:
 	@echo "Finance Tracker Docker Commands:"
-	@echo "  make dev         - Start development environment"
-	@echo "  make prod        - Start production environment"
-	@echo "  make prod-lowmem - Start production on low-memory VPS (1GB RAM)"
-	@echo "  make build       - Build all Docker images"
-	@echo "  make up          - Start all services"
-	@echo "  make down        - Stop all services"
-	@echo "  make logs        - View logs from all services"
-	@echo "  make clean       - Remove all containers and images"
-	@echo "  make reset       - Reset everything (clean + rebuild)"
+	@echo "  make dev                 - Start development environment"
+	@echo "  make prod                - Start production environment"
+	@echo "  make prod-lowmem         - Start production on low-memory VPS (1GB RAM)"
+	@echo "  make build-frontend-only - Build frontend only (for extremely low-memory)"
+	@echo "  make build               - Build all Docker images"
+	@echo "  make up                  - Start all services"
+	@echo "  make down                - Stop all services"
+	@echo "  make logs                - View logs from all services"
+	@echo "  make clean               - Remove all containers and images"
+	@echo "  make reset               - Reset everything (clean + rebuild)"
 
 # Development environment
 dev:
@@ -43,6 +44,16 @@ prod-lowmem:
 	@echo "  MongoDB: 384MB limit (256MB WiredTiger cache)"
 	@echo "  Backend: 384MB limit (256MB Node.js heap)"
 	@echo "  Frontend: 256MB limit"
+
+# Build frontend only for extremely low-memory systems
+# Stops all containers to maximize available memory during build
+build-frontend-only:
+	@echo "Stopping all containers to free memory..."
+	@docker stop $$(docker ps -aq) 2>/dev/null || true
+	@echo "Building frontend with maximum available memory..."
+	docker-compose -f docker-compose.yml build --no-cache frontend
+	@echo "Frontend build complete!"
+	@echo "Now run 'make prod-lowmem' to start all services"
 
 # Build all images
 build:
