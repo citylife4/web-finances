@@ -1,33 +1,12 @@
 import { reactive } from 'vue'
-import { accountsAPI, entriesAPI } from '../services/api'
-
-// Account types and categories
-export const ACCOUNT_TYPES = {
-  DEPOSITS: 'deposits',
-  INVESTMENTS: 'investments'
-}
-
-export const DEPOSIT_CATEGORIES = [
-  'Checking Account',
-  'Savings Account',
-  'Money Market',
-  'Certificate of Deposit (CD)',
-  'High Yield Savings'
-]
-
-export const INVESTMENT_CATEGORIES = [
-  'Stock Portfolio',
-  'Funds',
-  'ETFs',
-  'Bonds',
-  'Crypto',
-  'Crypto',
-]
+import { accountsAPI, entriesAPI, categoriesAPI, categoryTypesAPI } from '../services/api'
 
 // Application store
 export const store = reactive({
   accounts: [],
   monthlyEntries: [],
+  categories: [],
+  categoryTypes: [],
   loading: false,
   error: null,
   
@@ -216,14 +195,151 @@ export const store = reactive({
   async initialize() {
     try {
       await Promise.all([
+        this.loadCategoryTypes(),
         this.loadAccounts(),
-        this.loadEntries()
+        this.loadEntries(),
+        this.loadCategories()
       ])
     } catch (error) {
       this.setError('Failed to initialize application: ' + error.message)
     }
+  },
+
+  // Category management
+  async loadCategories() {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      const response = await categoriesAPI.getAll()
+      this.categories = response.data
+    } catch (error) {
+      this.setError('Failed to load categories: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  async addCategory(category) {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      const response = await categoriesAPI.create(category)
+      this.categories.push(response.data)
+      return response.data
+    } catch (error) {
+      this.setError('Failed to add category: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  async updateCategory(id, updates) {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      const response = await categoriesAPI.update(id, updates)
+      const index = this.categories.findIndex(cat => cat._id === id)
+      if (index !== -1) {
+        this.categories[index] = response.data
+      }
+      return response.data
+    } catch (error) {
+      this.setError('Failed to update category: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  async deleteCategory(id) {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      await categoriesAPI.delete(id)
+      this.categories = this.categories.filter(cat => cat._id !== id)
+    } catch (error) {
+      this.setError('Failed to delete category: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  getCategoriesByType(type) {
+    return this.categories.filter(cat => cat.type === type)
+  },
+
+  getCategoriesByTypeId(typeId) {
+    return this.categories.filter(cat => {
+      const catTypeId = typeof cat.typeId === 'string' ? cat.typeId : cat.typeId?._id
+      return catTypeId === typeId
+    })
+  },
+
+  // Category Type management
+  async loadCategoryTypes() {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      const response = await categoryTypesAPI.getAll()
+      this.categoryTypes = response.data
+    } catch (error) {
+      this.setError('Failed to load category types: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  async addCategoryType(categoryType) {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      const response = await categoryTypesAPI.create(categoryType)
+      this.categoryTypes.push(response.data)
+      return response.data
+    } catch (error) {
+      this.setError('Failed to add category type: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  async updateCategoryType(id, updates) {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      const response = await categoryTypesAPI.update(id, updates)
+      const index = this.categoryTypes.findIndex(type => type._id === id)
+      if (index !== -1) {
+        this.categoryTypes[index] = response.data
+      }
+      return response.data
+    } catch (error) {
+      this.setError('Failed to update category type: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
+  },
+
+  async deleteCategoryType(id) {
+    try {
+      this.setLoading(true)
+      this.clearError()
+      await categoryTypesAPI.delete(id)
+      this.categoryTypes = this.categoryTypes.filter(type => type._id !== id)
+    } catch (error) {
+      this.setError('Failed to delete category type: ' + error.message)
+      throw error
+    } finally {
+      this.setLoading(false)
+    }
   }
 })
 
-// Initialize store on load
-store.initialize()
+// Note: Don't auto-initialize here to avoid race conditions
+// Call store.initialize() from App.vue or main.js after Vue app is mounted

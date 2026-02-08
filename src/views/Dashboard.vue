@@ -20,33 +20,30 @@
     <div v-if="!store.loading && !store.error">
       <!-- Summary Cards -->
       <div class="summary-cards">
-      <div class="card deposits">
-        <div class="card-header">
-          <h3>💳 Total Deposits</h3>
+        <!-- Dynamic type cards -->
+        <div 
+          v-for="categoryType in store.categoryTypes" 
+          :key="categoryType._id"
+          class="card"
+          :style="{ borderTopColor: categoryType.color }"
+        >
+          <div class="card-header">
+            <h3>{{ categoryType.icon }} Total {{ categoryType.displayName }}</h3>
+          </div>
+          <div class="card-amount">
+            {{ formatCurrency(getTotalByTypeId(categoryType._id)) }}
+          </div>
         </div>
-        <div class="card-amount">
-          {{ formatCurrency(totalDeposits) }}
-        </div>
-      </div>
       
-      <div class="card investments">
-        <div class="card-header">
-          <h3>📈 Total Investments</h3>
-        </div>
-        <div class="card-amount">
-          {{ formatCurrency(totalInvestments) }}
-        </div>
-      </div>
-      
-      <div class="card total">
-        <div class="card-header">
-          <h3>💎 Total Net Worth</h3>
-        </div>
-        <div class="card-amount">
-          {{ formatCurrency(totalNetWorth) }}
+        <div class="card total">
+          <div class="card-header">
+            <h3>💎 Total Net Worth</h3>
+          </div>
+          <div class="card-amount">
+            {{ formatCurrency(totalNetWorth) }}
+          </div>
         </div>
       </div>
-    </div>
 
     <!-- Charts Section -->
     <div class="charts-section">
@@ -58,6 +55,37 @@
       <div class="chart-container">
         <h3>Assets Breakdown</h3>
         <canvas ref="breakdownChart"></canvas>
+      </div>
+
+      <div class="chart-container" v-if="categoryBreakdown.length > 0">
+        <h3>Category Breakdown</h3>
+        <canvas ref="categoryChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Category Insights -->
+    <div v-if="categoryInsights.length > 0" class="category-insights">
+      <h3>Category Analysis</h3>
+      <div class="insights-grid">
+        <div 
+          v-for="insight in categoryInsights" 
+          :key="insight.categoryId || 'no-category'"
+          class="insight-card"
+        >
+          <div class="insight-header">
+            <h4>{{ insight.name }}</h4>
+            <span class="parent-type">{{ insight.parentType }}</span>
+          </div>
+          <div class="insight-amount">
+            {{ formatCurrency(insight.total) }}
+          </div>
+          <div class="insight-percentage">
+            {{ insight.percentage }}% of {{ insight.parentType }}
+          </div>
+          <div class="insight-accounts">
+            {{ insight.accountCount }} account{{ insight.accountCount !== 1 ? 's' : '' }}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -84,9 +112,9 @@
 </template>
 
 <script>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Chart, registerables } from 'chart.js'
-import { store, ACCOUNT_TYPES } from '../store/api-store'
+import { store } from '../store/api-store'
 import { format } from 'date-fns'
 
 Chart.register(...registerables)
@@ -96,30 +124,60 @@ export default {
   setup() {
     const progressionChart = ref(null)
     const breakdownChart = ref(null)
+    const categoryChart = ref(null)
     let progressionChartInstance = null
     let breakdownChartInstance = null
+    let categoryChartInstance = null
 
-    const totalDeposits = computed(() => {
+    // Cleanup function to destroy all chart instances
+    const destroyCharts = () => {
+      if (progressionChartInstance) {
+        progressionChartInstance.destroy()
+        progressionChartInstance = null
+      }
+      if (breakdownChartInstance) {
+        breakdownChartInstance.destroy()
+        breakdownChartInstance = null
+      }
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy()
+        categoryChartInstance = null
+      }
+    }
+
+    const getTotalByTypeId = (typeId) => {
       try {
-        return store.getTotalByType(ACCOUNT_TYPES.DEPOSITS)
+        return store.accounts
+          .filter(acc => {
+            const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
+            return accTypeId === typeId
+          })
+          .reduce((total, account) => {
+            const latestEntry = store.monthlyEntries
+              .filter(entry => {
+                const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+                return entryAccountId === account._id
+              })
+              .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+            return total + (latestEntry ? latestEntry.amount : 0)
+          }, 0)
       } catch (error) {
-        console.error('Error calculating total deposits:', error)
+        console.error('Error calculating total for type:', error)
         return 0
       }
-    })
+    }
     
-    const totalInvestments = computed(() => {
-      try {
-        return store.getTotalByType(ACCOUNT_TYPES.INVESTMENTS)
-      } catch (error) {
-        console.error('Error calculating total investments:', error)
-        return 0
-      }
+    const totalNetWorth = computed(() => {
+      return store.accounts.reduce((total, account) => {
+        const latestEntry = store.monthlyEntries
+          .filter(entry => {
+            const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+            return entryAccountId === account._id
+          })
+          .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+        return total + (latestEntry ? latestEntry.amount : 0)
+      }, 0)
     })
-    
-    const totalNetWorth = computed(() => 
-      totalDeposits.value + totalInvestments.value
-    )
 
     const recentEntries = computed(() => 
       store.monthlyEntries
@@ -127,6 +185,74 @@ export default {
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5)
     )
+
+    const categoryBreakdown = computed(() => {
+      const breakdown = []
+      
+      // Group accounts by category
+      const categoryGroups = {}
+      
+      store.accounts.forEach(account => {
+        if (account.categoryId) {
+          const key = account.categoryId._id
+          if (!categoryGroups[key]) {
+            categoryGroups[key] = {
+              category: account.categoryId,
+              accounts: [],
+              total: 0
+            }
+          }
+          categoryGroups[key].accounts.push(account)
+        }
+      })
+      
+      // Calculate totals for each category
+      Object.values(categoryGroups).forEach(group => {
+        group.accounts.forEach(account => {
+          const latestEntry = store.monthlyEntries
+            .filter(entry => {
+              const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
+              return entryAccountId === account._id
+            })
+            .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+          
+          group.total += latestEntry ? latestEntry.amount : 0
+        })
+        
+        if (group.total > 0) {
+          breakdown.push({
+            name: group.category.name,
+            typeId: group.category.typeId,
+            total: group.total,
+            accountCount: group.accounts.length
+          })
+        }
+      })
+      
+      return breakdown.sort((a, b) => b.total - a.total)
+    })
+
+    const categoryInsights = computed(() => {
+      const insights = []
+      
+      // Add insights for categories
+      categoryBreakdown.value.forEach(item => {
+        const typeId = typeof item.typeId === 'string' ? item.typeId : item.typeId?._id
+        const categoryType = store.categoryTypes.find(t => t._id === typeId)
+        const parentTotal = getTotalByTypeId(typeId)
+        const percentage = parentTotal > 0 ? ((item.total / parentTotal) * 100).toFixed(1) : 0
+        
+        insights.push({
+          name: item.name,
+          parentType: categoryType?.displayName || 'Unknown',
+          total: item.total,
+          percentage,
+          accountCount: item.accountCount
+        })
+      })
+      
+      return insights.sort((a, b) => b.total - a.total)
+    })
 
     const formatCurrency = (amount) => {
       return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
@@ -158,40 +284,50 @@ export default {
         if (monthlyTotals.length === 0) return
 
         const ctx = progressionChart.value.getContext('2d')
+        
+        // Create dynamic datasets for each category type
+        const datasets = [
+          {
+            label: 'Total Net Worth',
+            data: monthlyTotals.map(data => data.total),
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            fill: true,
+            tension: 0.4
+          }
+        ]
+        
+        // Add a dataset for each category type found in the data
+        const typeDatasets = {}
+        store.categoryTypes.forEach(type => {
+          typeDatasets[type.name] = {
+            label: type.displayName,
+            data: monthlyTotals.map(data => {
+              const typeData = data.typeBreakdown?.find(t => t.typeName === type.name)
+              return typeData ? typeData.total : 0
+            }),
+            borderColor: type.color,
+            backgroundColor: type.color + '20', // Add transparency
+            fill: false,
+            tension: 0.4
+          }
+        })
+        
+        datasets.push(...Object.values(typeDatasets))
+        
         progressionChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
           labels: monthlyTotals.map(data => format(new Date(data.month + '-01'), 'MMM yyyy')),
-          datasets: [
-            {
-              label: 'Total Net Worth',
-              data: monthlyTotals.map(data => data.total),
-              borderColor: '#667eea',
-              backgroundColor: 'rgba(102, 126, 234, 0.1)',
-              fill: true,
-              tension: 0.4
-            },
-            {
-              label: 'Deposits',
-              data: monthlyTotals.map(data => data.deposits),
-              borderColor: '#f093fb',
-              backgroundColor: 'rgba(240, 147, 251, 0.1)',
-              fill: false,
-              tension: 0.4
-            },
-            {
-              label: 'Investments',
-              data: monthlyTotals.map(data => data.investments),
-              borderColor: '#f5576c',
-              backgroundColor: 'rgba(245, 87, 108, 0.1)',
-              fill: false,
-              tension: 0.4
-            }
-          ]
+          datasets
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
           scales: {
             y: {
               beginAtZero: true,
@@ -204,6 +340,9 @@ export default {
           },
           plugins: {
             tooltip: {
+              enabled: true,
+              position: 'nearest',
+              yAlign: 'bottom',
               callbacks: {
                 label: function(context) {
                   return context.dataset.label + ': ' + new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed.y)
@@ -226,13 +365,19 @@ export default {
       if (totalNetWorth.value === 0) return
 
       const ctx = breakdownChart.value.getContext('2d')
+      
+      // Get labels and data for each category type
+      const labels = store.categoryTypes.map(type => type.displayName)
+      const data = store.categoryTypes.map(type => getTotalByTypeId(type._id))
+      const colors = store.categoryTypes.map(type => type.color)
+      
       breakdownChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: ['Deposits', 'Investments'],
+          labels,
           datasets: [{
-            data: [totalDeposits.value, totalInvestments.value],
-            backgroundColor: ['#f093fb', '#f5576c'],
+            data,
+            backgroundColor: colors,
             borderWidth: 0
           }]
         },
@@ -253,19 +398,95 @@ export default {
       })
     }
 
+    const createCategoryChart = () => {
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy()
+      }
+
+      if (categoryBreakdown.value.length === 0) return
+
+      const ctx = categoryChart.value.getContext('2d')
+      
+      // Generate different colors for each category
+      const colors = [
+        '#667eea', '#764ba2', '#f093fb', '#f5576c', 
+        '#4facfe', '#00f2fe', '#43e97b', '#38f9d7',
+        '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3',
+        '#fad0c4', '#ffd1ff', '#c2e9fb', '#a1c4fd'
+      ]
+
+      categoryChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: categoryBreakdown.value.map(item => item.name),
+          datasets: [{
+            data: categoryBreakdown.value.map(item => item.total),
+            backgroundColor: colors.slice(0, categoryBreakdown.value.length),
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const item = categoryBreakdown.value[context.dataIndex]
+                  const typeId = typeof item.typeId === 'string' ? item.typeId : item.typeId?._id
+                  const categoryType = store.categoryTypes.find(t => t._id === typeId)
+                  const parentTotal = getTotalByTypeId(typeId)
+                  const percentage = parentTotal > 0 ? ((context.parsed / parentTotal) * 100).toFixed(1) : 0
+                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${categoryType?.displayName || 'Unknown'})`
+                }
+              }
+            },
+            legend: {
+              position: 'bottom',
+              labels: {
+                padding: 20,
+                usePointStyle: true
+              }
+            }
+          }
+        }
+      })
+    }
+
     onMounted(async () => {
+      // Always reload data to ensure we have the latest category types, categories, and accounts
+      try {
+        await Promise.all([
+          store.loadCategoryTypes(),
+          store.loadAccounts(),
+          store.loadCategories(),
+          store.loadEntries()
+        ])
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      }
+
       await createProgressionChart()
       createBreakdownChart()
+      createCategoryChart()
+    })
+
+    // Clean up chart instances to prevent memory leaks
+    onUnmounted(() => {
+      destroyCharts()
     })
 
     return {
       store,
-      totalDeposits,
-      totalInvestments,
+      getTotalByTypeId,
       totalNetWorth,
       recentEntries,
+      categoryBreakdown,
+      categoryInsights,
       progressionChart,
       breakdownChart,
+      categoryChart,
       formatCurrency,
       formatMonth,
       getAccountName
@@ -310,6 +531,7 @@ export default {
 .card {
   background: white;
   border-radius: 15px;
+  border-top: 5px solid #667eea;
   padding: 2rem;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   transition: transform 0.3s;
@@ -319,16 +541,8 @@ export default {
   transform: translateY(-5px);
 }
 
-.card.deposits {
-  border-left: 5px solid #f093fb;
-}
-
-.card.investments {
-  border-left: 5px solid #f5576c;
-}
-
 .card.total {
-  border-left: 5px solid #667eea;
+  border-top-color: #667eea;
 }
 
 .card-header h3 {
@@ -352,9 +566,10 @@ export default {
 .chart-container {
   background: white;
   border-radius: 15px;
-  padding: 2rem;
+  padding: 2rem 2rem 3rem 2rem;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  height: 400px;
+  min-height: 450px;
+  position: relative;
 }
 
 .chart-container h3 {
@@ -364,7 +579,8 @@ export default {
 }
 
 .chart-container canvas {
-  height: 300px !important;
+  max-height: 350px !important;
+  height: 350px !important;
 }
 
 .recent-entries {
@@ -439,6 +655,97 @@ export default {
   margin-bottom: 1rem;
 }
 
+/* Category Insights */
+.category-insights {
+  background: white;
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  margin-bottom: 3rem;
+}
+
+.category-insights h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.insight-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 10px;
+  padding: 1.5rem;
+  border-left: 4px solid;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.insight-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.insight-card:nth-child(4n+1) {
+  border-left-color: #667eea;
+}
+
+.insight-card:nth-child(4n+2) {
+  border-left-color: #f093fb;
+}
+
+.insight-card:nth-child(4n+3) {
+  border-left-color: #4facfe;
+}
+
+.insight-card:nth-child(4n+4) {
+  border-left-color: #43e97b;
+}
+
+.insight-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.insight-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.parent-type {
+  background: rgba(102, 126, 234, 0.1);
+  color: #667eea;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.insight-amount {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.insight-percentage {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.insight-accounts {
+  color: #888;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 768px) {
   .charts-section {
     grid-template-columns: 1fr;
@@ -454,6 +761,10 @@ export default {
   
   .dashboard-header h2 {
     font-size: 2rem;
+  }
+  
+  .insights-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

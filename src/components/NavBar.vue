@@ -2,19 +2,42 @@
   <nav class="navbar">
     <div class="nav-container">
       <h1 class="nav-title">💰 Finance Tracker</h1>
-      <div class="nav-links">
+      <div v-if="authStore.isAuthenticated" class="nav-links">
         <router-link to="/" class="nav-link">Dashboard</router-link>
         <router-link to="/accounts" class="nav-link">Manage Accounts</router-link>
+        <router-link to="/categories" class="nav-link">Categories</router-link>
+        <router-link to="/category-types" class="nav-link">Category Types</router-link>
         <router-link to="/entry" class="nav-link">Monthly Entry</router-link>
         <router-link to="/import" class="nav-link">Import Data</router-link>
+        <div class="nav-user">
+          <span class="user-name">👤 {{ authStore.user?.name || authStore.user?.email }}</span>
+          <button @click="handleLogout" class="btn-logout">Logout</button>
+        </div>
+      </div>
+      <div v-else class="nav-links">
+        <router-link to="/login" class="nav-link">Login</router-link>
+        <router-link to="/register" class="nav-link">Register</router-link>
       </div>
     </div>
   </nav>
 </template>
 
 <script>
+import { authStore } from '../store/auth-store'
+
 export default {
-  name: 'NavBar'
+  name: 'NavBar',
+  data() {
+    return {
+      authStore
+    }
+  },
+  methods: {
+    async handleLogout() {
+      await authStore.logout()
+      this.$router.push('/login')
+    }
+  }
 }
 </script>
 
@@ -44,6 +67,7 @@ export default {
 .nav-links {
   display: flex;
   gap: 2rem;
+  align-items: center;
 }
 
 .nav-link {
@@ -52,11 +76,41 @@ export default {
   padding: 0.5rem 1rem;
   border-radius: 5px;
   transition: background-color 0.3s;
+  white-space: nowrap;
 }
 
 .nav-link:hover,
 .nav-link.router-link-active {
   background-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.user-name {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.btn-logout {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.4rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 @media (max-width: 768px) {
@@ -67,6 +121,15 @@ export default {
   
   .nav-links {
     gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .nav-user {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    padding-top: 0.5rem;
   }
 }
 </style>

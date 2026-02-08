@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MongoDB Database
   mongodb:
@@ -11,10 +9,9 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: password123
       MONGO_INITDB_DATABASE: finance-tracker
     ports:
-      - "27018:27017"
+      - "27017:27017"
     volumes:
       - mongodb_data_dev:/data/db
-      - ./mongo-init:/docker-entrypoint-initdb.d
     networks:
       - finance-tracker-dev
 

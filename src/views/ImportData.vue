@@ -12,12 +12,12 @@
         <p><strong>Required XLSX format:</strong></p>
         <ul>
           <li><strong>First column:</strong> Bank/Wallet names</li>
-          <li><strong>Second column:</strong> Account type (deposits, investments)</li>
-          <li><strong>Third column:</strong> Account sub-type (e.g., Checking Account, 401(k))</li>
+          <li><strong>Second column:</strong> Account type ({{ getAvailableTypeNames() }})</li>
+          <li><strong>Third column:</strong> Category name (e.g., Checking Account, 401(k), Emergency Fund)</li>
           <li><strong>Remaining columns:</strong> Months/Years (e.g., Jan/2023, Feb/2023)</li>
         </ul>
         <p class="example-note">
-          💡 <strong>Example:</strong> Each row represents an account with its type and monthly balances.
+          💡 <strong>Smart Import:</strong> If a category in the third column doesn't exist, it will be automatically created for the specified account type.
         </p>
         <div class="example-actions">
           <button @click="downloadExample" class="btn btn-secondary">
@@ -32,7 +32,7 @@
             <tr>
               <th>Bank/Wallet</th>
               <th>Type</th>
-              <th>Sub-type</th>
+              <th>Category</th>
               <th>Jan/2023</th>
               <th>Feb/2023</th>
             </tr>
@@ -48,19 +48,31 @@
             <tr>
               <td>Bank B</td>
               <td>investments</td>
-              <td>401(k)</td>
+              <td>Stock Portfolio</td>
               <td>200</td>
               <td>250</td>
             </tr>
             <tr>
-              <td>Wallet X</td>
+              <td>Bank C</td>
               <td>deposits</td>
-              <td>Savings Account</td>
+              <td>Emergency Fund</td>
               <td>50</td>
               <td>60</td>
             </tr>
+            <tr>
+              <td>Brokerage X</td>
+              <td>investments</td>
+              <td>401k Rollover</td>
+              <td>300</td>
+              <td>320</td>
+            </tr>
           </tbody>
         </table>
+        <p class="example-explanation">
+          <small>
+            <strong>Note:</strong> All categories will be created automatically if they don't exist.
+          </small>
+        </p>
       </div>
     </div>
 
@@ -90,6 +102,22 @@
       <div v-if="selectedFile" class="selected-file">
         <span class="file-name">📎 {{ selectedFile.name }}</span>
         <button @click="clearFile" class="btn btn-secondary btn-small">Remove</button>
+      </div>
+
+      <!-- Sheet Selection -->
+      <div v-if="availableSheets.length > 1" class="sheet-selection">
+        <h4>📑 Select Sheet</h4>
+        <p class="sheet-info">Your file contains {{ availableSheets.length }} sheets. Please select one:</p>
+        <div class="sheet-list">
+          <button 
+            v-for="(sheet, index) in availableSheets" 
+            :key="index"
+            @click="selectSheet(sheet)"
+            :class="['sheet-button', { 'active': selectedSheet === sheet }]"
+          >
+            {{ sheet }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -154,7 +182,7 @@
                 <tr v-for="account in previewData.accounts" :key="account.name">
                   <td>{{ account.name }}</td>
                   <td>{{ account.type }}</td>
-                  <td>{{ account.category }}</td>
+                  <td>{{ account.categoryName }}</td>
                   <td>
                     <span class="status-badge" :class="account.exists ? 'existing' : 'new'">
                       {{ account.exists ? 'Existing' : 'New' }}
@@ -240,10 +268,17 @@ export default {
       previewData: null,
       activeTab: 'accounts',
       error: null,
-      successMessage: null
+      successMessage: null,
+      availableSheets: [],
+      selectedSheet: null,
+      workbookData: null
     }
   },
   methods: {
+    getAvailableTypeNames() {
+      return store.categoryTypes.map(t => t.name).join(', ') || 'loading...'
+    },
+    
     handleDragOver(e) {
       e.preventDefault()
       this.isDragOver = true
@@ -287,31 +322,75 @@ export default {
     async parseFile(file) {
       this.isProcessing = true
       this.previewData = null
+      this.availableSheets = []
+      this.selectedSheet = null
       
       try {
         const arrayBuffer = await file.arrayBuffer()
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+        const workbook = XLSX.read(arrayBuffer, {
+          type: 'array',
+          cellDates: true,  // Parse Excel date serial numbers as Date objects
+          cellNF: false,
+          cellText: false
+        })
         
-        // Get the first worksheet
-        const firstSheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[firstSheetName]
+        // Store workbook for later sheet selection
+        this.workbookData = workbook
+        this.availableSheets = workbook.SheetNames
         
-        // Convert to JSON with header row
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-        
-        if (jsonData.length < 2) {
-          throw new Error('File must have at least 2 rows (header row and data rows)')
+        // If only one sheet, auto-select it
+        if (this.availableSheets.length === 1) {
+          this.selectedSheet = this.availableSheets[0]
+          await this.processSelectedSheet()
+        } else {
+          // Multiple sheets - wait for user selection
+          this.isProcessing = false
         }
-        
-        const parsedData = this.parseReverseTableData(jsonData)
-        this.previewData = await this.preparePreviewData(parsedData)
         
       } catch (error) {
         console.error('Parse error:', error)
         this.error = `Failed to parse file: ${error.message}`
+        this.isProcessing = false
+      }
+    },
+    
+    async selectSheet(sheetName) {
+      this.selectedSheet = sheetName
+      this.isProcessing = true
+      this.clearError()
+      
+      try {
+        await this.processSelectedSheet()
+      } catch (error) {
+        console.error('Parse error:', error)
+        this.error = `Failed to parse sheet: ${error.message}`
       } finally {
         this.isProcessing = false
       }
+    },
+    
+    async processSelectedSheet() {
+      if (!this.workbookData || !this.selectedSheet) {
+        throw new Error('No sheet selected')
+      }
+      
+      const worksheet = this.workbookData.Sheets[this.selectedSheet]
+      
+      // Convert to JSON with header row
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+      
+      console.log('📊 Sheet data:', jsonData)
+      console.log('📊 Total rows:', jsonData.length)
+      console.log('📊 First row (headers):', jsonData[0])
+      console.log('📊 Second row (first data):', jsonData[1])
+      
+      if (jsonData.length < 2) {
+        throw new Error(`Selected sheet must have at least 2 rows (header row and data rows). Found ${jsonData.length} row(s).`)
+      }
+      
+      const parsedData = this.parseReverseTableData(jsonData)
+      console.log('📊 Parsed data:', parsedData)
+      this.previewData = await this.preparePreviewData(parsedData)
     },
     
     parseReverseTableData(jsonData) {
@@ -324,8 +403,11 @@ export default {
         .map(h => h.trim())
         .filter(h => h)
       
+      console.log('📋 Parsed headers:', headers)
+      console.log('📋 Headers count:', headers.length)
+      
       if (headers.length === 0) {
-        throw new Error('No month/year columns found')
+        throw new Error('No month/year columns found. Make sure your data has columns after the first 3 (Bank/Wallet, Type, Category).')
       }
       
       const accounts = []
@@ -336,35 +418,46 @@ export default {
         const row = jsonData[rowIndex]
         const accountName = row[0]
         const accountType = row[1]
-        const accountCategory = row[2]
+        const subTypeOrCategory = row[2]
+        
+        console.log(`Row ${rowIndex}:`, { accountName, accountType, subTypeOrCategory, rowLength: row.length })
         
         if (!accountName || accountName.trim() === '') {
+          console.log(`Skipping row ${rowIndex}: empty account name`)
           continue // Skip empty rows
         }
         
-        if (!accountType || !accountCategory) {
-          continue // Skip rows without type or category
+        if (!accountType || !subTypeOrCategory) {
+          console.log(`Skipping row ${rowIndex}: missing type or category`)
+          continue // Skip rows without type or sub-type/category
         }
         
-        // Validate account type
+        // Validate account type - find matching category type
         const normalizedType = accountType.trim().toLowerCase()
-        if (normalizedType !== 'deposits' && normalizedType !== 'investments') {
-          console.warn(`Invalid account type '${accountType}' for account '${accountName}'. Must be 'deposits' or 'investments'.`)
+        const matchingType = store.categoryTypes.find(t => t.name === normalizedType)
+        
+        if (!matchingType) {
+          const availableTypes = store.categoryTypes.map(t => t.name).join(', ')
+          console.warn(`Invalid account type '${accountType}' for account '${accountName}'. Must be one of: ${availableTypes}`)
           continue
         }
+        
+        // Determine category name from third column
+        const categoryName = subTypeOrCategory.trim()
         
         // Add account (check for duplicates)
         let account = accounts.find(acc => 
           acc.name === accountName.trim() && 
-          acc.type === normalizedType && 
-          acc.category === accountCategory.trim()
+          acc.typeName === normalizedType && 
+          acc.categoryName === categoryName
         )
         
         if (!account) {
           account = {
             name: accountName.trim(),
-            type: normalizedType,
-            category: accountCategory.trim()
+            typeName: normalizedType,
+            typeId: matchingType._id,
+            categoryName: categoryName
           }
           accounts.push(account)
         }
@@ -392,48 +485,76 @@ export default {
           // Add entry
           entries.push({
             accountName: accountName.trim(),
-            accountType: normalizedType,
-            accountCategory: accountCategory.trim(),
+            accountTypeName: normalizedType,
+            accountTypeId: matchingType._id,
+            categoryName: categoryName,
             month: monthYear,
             amount: numAmount
           })
         }
       }
       
+      console.log('✅ Parsing complete:', { accountsCount: accounts.length, entriesCount: entries.length })
+      console.log('✅ Accounts:', accounts)
+      console.log('✅ Entries sample:', entries.slice(0, 5))
+      
       return { accounts, entries }
     },
     
     parseMonthYear(monthHeader) {
+      // Handle JavaScript Date objects (from Excel dates with cellDates: true)
+      if (monthHeader instanceof Date) {
+        const year = monthHeader.getFullYear()
+        const month = (monthHeader.getMonth() + 1).toString().padStart(2, '0')
+        return `${year}-${month}`
+      }
+
       const header = monthHeader.toString().trim()
-      
+
+      // Check if it's an Excel serial date number (positive number > 1000)
+      if (!isNaN(monthHeader) && monthHeader > 1000) {
+        try {
+          // Excel serial date: days since 1900-01-01
+          const excelEpoch = new Date(1900, 0, 1)
+          const daysOffset = monthHeader - 2 // Excel incorrectly treats 1900 as a leap year
+          const date = new Date(excelEpoch.getTime() + daysOffset * 24 * 60 * 60 * 1000)
+
+          const year = date.getFullYear()
+          const month = (date.getMonth() + 1).toString().padStart(2, '0')
+          return `${year}-${month}`
+        } catch (e) {
+          // If date conversion fails, continue with string parsing
+        }
+      }
+
       // Try to parse various formats like "Jan/2023", "January 2023", "01/2023", etc.
       const patterns = [
         /^(\w{3})\/(\d{4})$/i,  // Jan/2023
         /^(\w{3})\s+(\d{4})$/i, // Jan 2023
         /^(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
         /^(\w+)\s+(\d{4})$/i,    // January 2023
-        /^'(\w{3})\/(\d{4})$/i,  // Jan/2023
-        /^'(\w{3})\s+(\d{4})$/i, // Jan 2023
-        /^'(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
-        /^'(\w+)\s+(\d{4})$/i    // January 2023
+        /^'(\w{3})\/(\d{4})$/i,  // 'Jan/2023
+        /^'(\w{3})\s+(\d{4})$/i, // 'Jan 2023
+        /^'(\d{1,2})\/(\d{4})$/,  // '1/2023 or '01/2023
+        /^'(\w+)\s+(\d{4})$/i    // 'January 2023
       ]
-      
+
       for (const pattern of patterns) {
         const match = header.match(pattern)
         if (match) {
           let month = match[1]
           const year = match[2]
-          
+
           // Convert month name to number
           if (isNaN(month)) {
             const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
                               'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
             const fullMonthNames = ['january', 'february', 'march', 'april', 'may', 'june',
                                    'july', 'august', 'september', 'october', 'november', 'december']
-            
+
             const shortIndex = monthNames.indexOf(month.toLowerCase().substring(0, 3))
             const fullIndex = fullMonthNames.indexOf(month.toLowerCase())
-            
+
             if (shortIndex !== -1) {
               month = (shortIndex + 1).toString().padStart(2, '0')
             } else if (fullIndex !== -1) {
@@ -444,28 +565,31 @@ export default {
           } else {
             month = parseInt(month).toString().padStart(2, '0')
           }
-          
+
           return `${year}-${month}`
         }
       }
-      
+
       return null
     },
     
     async preparePreviewData(parsedData) {
-      // Load existing accounts to check which ones already exist
-      await store.loadAccounts()
+      // Load existing accounts and categories to check which ones already exist
+      await Promise.all([store.loadAccounts(), store.loadCategories()])
       
       const existingAccounts = store.accounts
       
       // Prepare accounts data with existence check
       const accounts = parsedData.accounts.map(account => ({
         ...account,
-        exists: existingAccounts.some(existing => 
-          existing.name.toLowerCase() === account.name.toLowerCase() &&
-          existing.type === account.type &&
-          existing.category === account.category
-        )
+        exists: existingAccounts.some(existing => {
+          const existingTypeId = typeof existing.typeId === 'string' ? existing.typeId : existing.typeId?._id
+          return existing.name.toLowerCase() === account.name.toLowerCase() &&
+            existingTypeId === account.typeId &&
+            // Check if the category matches
+            (existing.categoryId && 
+             store.categories.find(cat => cat._id === existing.categoryId._id)?.name === account.categoryName)
+        })
       }))
       
       // Get unique months
@@ -485,7 +609,42 @@ export default {
       this.clearError()
       
       try {
-        // First, create/update accounts
+        // First, create categories if needed
+        const categoryMap = new Map() // Map category names to IDs
+        
+        for (const accountData of this.previewData.accounts) {
+          if (accountData.categoryName && !accountData.exists) {
+            const categoryKey = `${accountData.categoryName}-${accountData.typeId}`
+            
+            if (!categoryMap.has(categoryKey)) {
+              // Check if category already exists
+              let existingCategory = store.categories.find(cat => {
+                const catTypeId = typeof cat.typeId === 'string' ? cat.typeId : cat.typeId?._id
+                return cat.name === accountData.categoryName && 
+                  catTypeId === accountData.typeId
+              })
+              
+              if (!existingCategory) {
+                // Create new category
+                try {
+                  existingCategory = await store.addCategory({
+                    name: accountData.categoryName,
+                    typeId: accountData.typeId,
+                    description: `Imported from XLSX`
+                  })
+                  console.log('Created category:', existingCategory)
+                } catch (error) {
+                  console.warn(`Failed to create category '${accountData.categoryName}':`, error)
+                  continue
+                }
+              }
+              
+              categoryMap.set(categoryKey, existingCategory._id)
+            }
+          }
+        }
+        
+        // Then, create/update accounts
         const accountMap = new Map() // Map account names to IDs
         
         for (const accountData of this.previewData.accounts) {
@@ -493,22 +652,36 @@ export default {
           
           if (accountData.exists) {
             // Find existing account
-            account = store.accounts.find(existing =>
-              existing.name.toLowerCase() === accountData.name.toLowerCase() &&
-              existing.type === accountData.type &&
-              existing.category === accountData.category
-            )
+            account = store.accounts.find(existing => {
+              const existingTypeId = typeof existing.typeId === 'string' ? existing.typeId : existing.typeId?._id
+              return existing.name.toLowerCase() === accountData.name.toLowerCase() &&
+                existingTypeId === accountData.typeId &&
+                // Check category match
+                (existing.categoryId && 
+                 store.categories.find(cat => cat._id === existing.categoryId._id)?.name === accountData.categoryName)
+            })
           } else {
             // Create new account
-            account = await store.addAccount({
+            const categoryKey = `${accountData.categoryName}-${accountData.typeId}`
+            const categoryId = categoryMap.get(categoryKey)
+            
+            if (!categoryId) {
+              console.warn(`No category ID found for ${accountData.categoryName}`)
+              continue
+            }
+            
+            const accountPayload = {
               name: accountData.name,
-              type: accountData.type,
-              category: accountData.category
-            })
+              typeId: accountData.typeId,
+              categoryId: categoryId
+            }
+            
+            account = await store.addAccount(accountPayload)
+            console.log('Created account:', account)
           }
           
           if (account && account._id) {
-            accountMap.set(`${accountData.name}-${accountData.type}-${accountData.category}`, account._id)
+            accountMap.set(`${accountData.name}-${accountData.typeId}-${accountData.categoryName}`, account._id)
           }
         }
         
@@ -516,23 +689,37 @@ export default {
         const entries = []
         
         for (const entryData of this.previewData.entries) {
-          const accountKey = `${entryData.accountName}-${entryData.accountType}-${entryData.accountCategory}`
+          const accountKey = `${entryData.accountName}-${entryData.accountTypeId}-${entryData.categoryName}`
           const accountId = accountMap.get(accountKey)
           
           if (accountId) {
             entries.push({
-              accountId,
+              accountId: String(accountId), // Ensure it's a string
               month: entryData.month,
               amount: entryData.amount
             })
+          } else {
+            console.warn(`No account ID found for entry:`, entryData)
           }
         }
+        
+        console.log('📊 Prepared entries for import:', entries)
+        console.log('📊 Total entries:', entries.length)
         
         if (entries.length > 0) {
           await store.saveMonthlyEntries(entries)
         }
         
-        this.successMessage = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
+        // Count created categories
+        const createdCategoriesCount = categoryMap.size
+        const createdAccountsCount = this.previewData.accounts.filter(acc => !acc.exists).length
+        
+        let successMsg = `Successfully imported ${this.previewData.accounts.length} accounts and ${entries.length} monthly entries.`
+        if (createdCategoriesCount > 0) {
+          successMsg += ` Created ${createdCategoriesCount} new categories.`
+        }
+        
+        this.successMessage = successMsg
         this.clearPreview()
         
       } catch (error) {
@@ -546,6 +733,9 @@ export default {
     clearFile() {
       this.selectedFile = null
       this.$refs.fileInput.value = ''
+      this.availableSheets = []
+      this.selectedSheet = null
+      this.workbookData = null
       this.clearPreview()
     },
     
@@ -573,6 +763,14 @@ export default {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2
       }).format(amount)
+    }
+  },
+  async mounted() {
+    // Reload category types on mount to ensure we have the latest
+    try {
+      await store.loadCategoryTypes()
+    } catch (error) {
+      console.error('Failed to load category types:', error)
     }
   }
 }
@@ -644,6 +842,13 @@ export default {
 .example-table {
   overflow-x: auto;
   margin-top: 1.5rem;
+}
+
+.example-explanation {
+  margin-top: 0.75rem;
+  color: #666;
+  font-style: italic;
+  text-align: center;
 }
 
 .example-table table {
@@ -992,6 +1197,55 @@ export default {
 .btn-secondary:hover:not(:disabled) {
   background: #5a6268;
   transform: translateY(-2px);
+}
+
+/* Sheet Selection */
+.sheet-selection {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+}
+
+.sheet-selection h4 {
+  margin-top: 0;
+  color: #495057;
+  font-size: 1.1rem;
+}
+
+.sheet-info {
+  color: #6c757d;
+  margin-bottom: 1rem;
+}
+
+.sheet-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.sheet-button {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+  color: #495057;
+}
+
+.sheet-button:hover {
+  border-color: #667eea;
+  background: #f8f9ff;
+  transform: translateY(-2px);
+}
+
+.sheet-button.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
 }
 
 /* Responsive Design */

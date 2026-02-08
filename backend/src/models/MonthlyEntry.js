@@ -1,0 +1,30 @@
+const mongoose = require('mongoose');
+
+const monthlyEntrySchema = new mongoose.Schema({
+  accountId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Account',
+    required: true
+  },
+  month: {
+    type: String,
+    required: true,
+    match: /^\d{4}-\d{2}$/ // YYYY-MM format
+  },
+  amount: {
+    type: Number,
+    required: true
+    // Negative amounts allowed for credit cards, loans, debts, etc.
+  }
+}, {
+  timestamps: true
+});
+
+// Ensure one entry per account per month
+monthlyEntrySchema.index({ accountId: 1, month: 1 }, { unique: true });
+
+// Index for analytics queries
+monthlyEntrySchema.index({ month: 1 });
+monthlyEntrySchema.index({ accountId: 1 });
+
+module.exports = mongoose.model('MonthlyEntry', monthlyEntrySchema);

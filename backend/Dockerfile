@@ -11,7 +11,8 @@ COPY package*.json ./
 RUN npm ci --only=production
 
 # Copy source code
-COPY . .
+COPY src/ ./src/
+COPY healthcheck.js ./
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
@@ -23,6 +24,9 @@ USER backend
 
 # Expose port
 EXPOSE 3001
+
+# Start command
+CMD ["node", "src/server.js"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
