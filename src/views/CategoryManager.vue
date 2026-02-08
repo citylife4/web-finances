@@ -23,10 +23,15 @@
 
           <div class="form-group">
             <label for="categoryType">Category Type</label>
-            <select id="categoryType" v-model="newCategory.type" required>
+            <select id="categoryType" v-model="newCategory.typeId" required>
               <option value="">Select Category Type</option>
-              <option :value="ACCOUNT_TYPES.DEPOSITS">Deposits</option>
-              <option :value="ACCOUNT_TYPES.INVESTMENTS">Investments</option>
+              <option 
+                v-for="type in store.categoryTypes" 
+                :key="type._id"
+                :value="type._id"
+              >
+                {{ type.icon }} {{ type.displayName }}
+              </option>
             </select>
           </div>
         </div>
@@ -47,16 +52,16 @@
 
     <!-- Categories List -->
     <div class="categories-list">
-      <div class="category-section" v-for="accountType in [ACCOUNT_TYPES.DEPOSITS, ACCOUNT_TYPES.INVESTMENTS]" :key="accountType">
-        <h3>{{ accountType === ACCOUNT_TYPES.DEPOSITS ? 'Deposits' : 'Investments' }} Categories</h3>
+      <div class="category-section" v-for="categoryType in store.categoryTypes" :key="categoryType._id">
+        <h3>{{ categoryType.icon }} {{ categoryType.displayName }} Categories</h3>
         
-        <div v-if="getCategoriesByType(accountType).length === 0" class="no-categories">
-          No categories defined for {{ accountType === ACCOUNT_TYPES.DEPOSITS ? 'deposits' : 'investments' }} yet.
+        <div v-if="getCategoriesByTypeId(categoryType._id).length === 0" class="no-categories">
+          No categories defined for {{ categoryType.displayName.toLowerCase() }} yet.
         </div>
         
         <div v-else class="categories-grid">
           <div 
-            v-for="category in getCategoriesByType(accountType)" 
+            v-for="category in getCategoriesByTypeId(categoryType._id)" 
             :key="category._id"
             class="category-card"
           >
@@ -73,9 +78,14 @@
                 </div>
                 <div class="form-group">
                   <label>Category Type</label>
-                  <select v-model="editingCategory.type" required>
-                    <option :value="ACCOUNT_TYPES.DEPOSITS">Deposits</option>
-                    <option :value="ACCOUNT_TYPES.INVESTMENTS">Investments</option>
+                  <select v-model="editingCategory.typeId" required>
+                    <option 
+                      v-for="type in store.categoryTypes" 
+                      :key="type._id"
+                      :value="type._id"
+                    >
+                      {{ type.icon }} {{ type.displayName }}
+                    </option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -110,22 +120,34 @@
 </template>
 
 <script>
-import { ref } from 'vue'
-import { store, ACCOUNT_TYPES } from '../store/api-store'
+import { ref, onMounted } from 'vue'
+import { store } from '../store/api-store'
 
 export default {
   name: 'CategoryManager',
   setup() {
     const newCategory = ref({
       name: '',
-      type: '',
+      typeId: '',
       description: ''
     })
 
     const editingCategory = ref(null)
 
-    const getCategoriesByType = (type) => {
-      return store.getCategoriesByType(type)
+    // Reload data on mount to get latest category types and categories
+    onMounted(async () => {
+      try {
+        await Promise.all([
+          store.loadCategoryTypes(),
+          store.loadCategories()
+        ])
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      }
+    })
+
+    const getCategoriesByTypeId = (typeId) => {
+      return store.getCategoriesByTypeId(typeId)
     }
 
     const addCategory = async () => {
@@ -135,7 +157,7 @@ export default {
         // Reset form
         newCategory.value = {
           name: '',
-          type: '',
+          typeId: '',
           description: ''
         }
       } catch (error) {
@@ -146,15 +168,21 @@ export default {
 
     const editCategory = (category) => {
       editingCategory.value = { ...category }
+      // Extract typeId properly from populated data
+      if (editingCategory.value.typeId && typeof editingCategory.value.typeId === 'object') {
+        editingCategory.value.typeId = editingCategory.value.typeId._id
+      }
     }
 
     const updateCategory = async () => {
       try {
         await store.updateCategory(editingCategory.value._id, {
           name: editingCategory.value.name,
-          type: editingCategory.value.type,
+          typeId: editingCategory.value.typeId,
           description: editingCategory.value.description
         })
+        // Reload accounts since the backend cascades typeId changes to accounts
+        await store.loadAccounts()
         editingCategory.value = null
       } catch (error) {
         console.error('Failed to update category:', error)
@@ -181,10 +209,9 @@ export default {
 
     return {
       store,
-      ACCOUNT_TYPES,
       newCategory,
       editingCategory,
-      getCategoriesByType,
+      getCategoriesByTypeId,
       addCategory,
       editCategory,
       updateCategory,

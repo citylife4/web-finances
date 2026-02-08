@@ -5,6 +5,7 @@ import AccountManager from '../views/AccountManager.vue'
 import MonthlyEntry from '../views/MonthlyEntry.vue'
 import ImportData from '../views/ImportData.vue'
 import CategoryManager from '../views/CategoryManager.vue'
+import CategoryTypeManager from '../views/CategoryTypeManager.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 
@@ -37,6 +38,12 @@ const routes = [
     path: '/categories',
     name: 'CategoryManager',
     component: CategoryManager,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/category-types',
+    name: 'CategoryTypeManager',
+    component: CategoryTypeManager,
     meta: { requiresAuth: true }
   },
   {

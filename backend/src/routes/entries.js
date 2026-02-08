@@ -161,6 +161,11 @@ router.delete('/:id', async (req, res) => {
 // GET /api/entries/analytics/totals - Get monthly totals for analytics
 router.get('/analytics/totals', async (req, res) => {
   try {
+    const { CategoryType } = require('../models');
+    
+    // Get all category types for dynamic grouping
+    const categoryTypes = await CategoryType.find();
+    
     const pipeline = [
       {
         $lookup: {
@@ -174,10 +179,22 @@ router.get('/analytics/totals', async (req, res) => {
         $unwind: '$account'
       },
       {
+        $lookup: {
+          from: 'categorytypes',
+          localField: 'account.typeId',
+          foreignField: '_id',
+          as: 'categoryType'
+        }
+      },
+      {
+        $unwind: '$categoryType'
+      },
+      {
         $group: {
           _id: {
             month: '$month',
-            type: '$account.type'
+            typeId: '$categoryType._id',
+            typeName: '$categoryType.name'
           },
           total: { $sum: '$amount' }
         }
@@ -185,22 +202,11 @@ router.get('/analytics/totals', async (req, res) => {
       {
         $group: {
           _id: '$_id.month',
-          deposits: {
-            $sum: {
-              $cond: [
-                { $eq: ['$_id.type', 'deposits'] },
-                '$total',
-                0
-              ]
-            }
-          },
-          investments: {
-            $sum: {
-              $cond: [
-                { $eq: ['$_id.type', 'investments'] },
-                '$total',
-                0
-              ]
+          typeBreakdown: {
+            $push: {
+              typeId: '$_id.typeId',
+              typeName: '$_id.typeName',
+              total: '$total'
             }
           }
         }
@@ -208,9 +214,8 @@ router.get('/analytics/totals', async (req, res) => {
       {
         $project: {
           month: '$_id',
-          deposits: 1,
-          investments: 1,
-          total: { $add: ['$deposits', '$investments'] },
+          typeBreakdown: 1,
+          total: { $sum: '$typeBreakdown.total' },
           _id: 0
         }
       },
@@ -222,6 +227,7 @@ router.get('/analytics/totals', async (req, res) => {
     const totals = await MonthlyEntry.aggregate(pipeline);
     res.json(totals);
   } catch (error) {
+    console.error('Analytics error:', error);
     res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });

@@ -6,6 +6,7 @@
         <router-link to="/" class="nav-link">Dashboard</router-link>
         <router-link to="/accounts" class="nav-link">Manage Accounts</router-link>
         <router-link to="/categories" class="nav-link">Categories</router-link>
+        <router-link to="/category-types" class="nav-link">Category Types</router-link>
         <router-link to="/entry" class="nav-link">Monthly Entry</router-link>
         <router-link to="/import" class="nav-link">Import Data</router-link>
         <div class="nav-user">

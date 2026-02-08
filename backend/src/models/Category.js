@@ -6,10 +6,15 @@ const categorySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  typeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CategoryType',
+    required: true
+  },
+  // Keep type field for backward compatibility during migration
   type: {
     type: String,
-    required: true,
-    enum: ['deposits', 'investments']
+    trim: true
   },
   description: {
     type: String,
@@ -20,6 +25,7 @@ const categorySchema = new mongoose.Schema({
 });
 
 // Ensure unique category names within each type
-categorySchema.index({ name: 1, type: 1 }, { unique: true });
+categorySchema.index({ name: 1, typeId: 1 }, { unique: true });
+categorySchema.index({ typeId: 1 });
 
 module.exports = mongoose.model('Category', categorySchema);

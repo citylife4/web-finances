@@ -185,8 +185,11 @@ export const categoriesAPI = {
   // Get all categories
   getAll: () => api.get('/categories'),
   
-  // Get categories by type
-  getByType: (type) => api.get(`/categories/${type}`),
+  // Get categories by type ID
+  getByTypeId: (typeId) => api.get(`/categories/type/${typeId}`),
+  
+  // Get categories by type name (backward compatibility)
+  getByTypeName: (typeName) => api.get(`/categories/by-name/${typeName}`),
   
   // Create a new category
   create: (categoryData) => api.post('/categories', categoryData),
@@ -196,6 +199,24 @@ export const categoriesAPI = {
   
   // Delete a category
   delete: (id) => api.delete(`/categories/${id}`)
+}
+
+// Category Type API calls
+export const categoryTypesAPI = {
+  // Get all category types
+  getAll: () => api.get('/category-types'),
+  
+  // Get a single category type
+  getById: (id) => api.get(`/category-types/${id}`),
+  
+  // Create a new category type
+  create: (typeData) => api.post('/category-types', typeData),
+  
+  // Update a category type
+  update: (id, typeData) => api.put(`/category-types/${id}`, typeData),
+  
+  // Delete a category type
+  delete: (id) => api.delete(`/category-types/${id}`)
 }
 
 // Health check
