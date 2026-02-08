@@ -9,5 +9,12 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
+  },
+  build: {
+    minify: 'esbuild',
+    // Remove console and debugger statements in production
+    esbuild: {
+      drop: ['console', 'debugger']
+    }
   }
 })

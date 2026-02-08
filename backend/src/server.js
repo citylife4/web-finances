@@ -70,8 +70,17 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/finance-tracker';
 
 mongoose.connect(MONGODB_URI)
-  .then(() => {
+  .then(async () => {
     console.log('Connected to MongoDB');
+    // Seed default category types if they don't exist
+    const CategoryType = require('./models/CategoryType');
+    const defaultTypes = [
+      { name: 'deposits', displayName: 'Deposits', description: 'Savings accounts, checking accounts, and other deposit accounts', color: '#4CAF50', icon: '💰', isSystem: true },
+      { name: 'investments', displayName: 'Investments', description: 'Stocks, bonds, mutual funds, and other investment accounts', color: '#2196F3', icon: '📈', isSystem: true }
+    ];
+    for (const type of defaultTypes) {
+      await CategoryType.findOneAndUpdate({ name: type.name }, { $setOnInsert: type }, { upsert: true });
+    }
   })
   .catch((error) => {
     console.error('MongoDB connection error:', error);

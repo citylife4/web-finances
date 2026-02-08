@@ -98,11 +98,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { name, typeId, description } = req.body;
-    
+
     const updateData = {};
     if (name) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim();
-    
+
     // If typeId is being changed, verify it exists and update the type field
     if (typeId) {
       const categoryType = await CategoryType.findById(typeId);
@@ -112,17 +112,25 @@ router.put('/:id', async (req, res) => {
       updateData.typeId = typeId;
       updateData.type = categoryType.name; // Keep for backward compatibility
     }
-    
+
     const category = await Category.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
     ).populate('typeId', 'name displayName color');
-    
+
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });
     }
-    
+
+    // If typeId was changed, cascade the update to all accounts using this category
+    if (typeId) {
+      await Account.updateMany(
+        { categoryId: req.params.id },
+        { typeId: typeId }
+      );
+    }
+
     res.json(category);
   } catch (error) {
     if (error.code === 11000) {

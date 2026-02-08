@@ -120,7 +120,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { store } from '../store/api-store'
 
 export default {
@@ -133,6 +133,18 @@ export default {
     })
 
     const editingCategory = ref(null)
+
+    // Reload data on mount to get latest category types and categories
+    onMounted(async () => {
+      try {
+        await Promise.all([
+          store.loadCategoryTypes(),
+          store.loadCategories()
+        ])
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      }
+    })
 
     const getCategoriesByTypeId = (typeId) => {
       return store.getCategoriesByTypeId(typeId)
@@ -169,6 +181,8 @@ export default {
           typeId: editingCategory.value.typeId,
           description: editingCategory.value.description
         })
+        // Reload accounts since the backend cascades typeId changes to accounts
+        await store.loadAccounts()
         editingCategory.value = null
       } catch (error) {
         console.error('Failed to update category:', error)

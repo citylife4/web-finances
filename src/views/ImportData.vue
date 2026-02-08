@@ -327,7 +327,12 @@ export default {
       
       try {
         const arrayBuffer = await file.arrayBuffer()
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+        const workbook = XLSX.read(arrayBuffer, {
+          type: 'array',
+          cellDates: true,  // Parse Excel date serial numbers as Date objects
+          cellNF: false,
+          cellText: false
+        })
         
         // Store workbook for later sheet selection
         this.workbookData = workbook
@@ -497,36 +502,59 @@ export default {
     },
     
     parseMonthYear(monthHeader) {
+      // Handle JavaScript Date objects (from Excel dates with cellDates: true)
+      if (monthHeader instanceof Date) {
+        const year = monthHeader.getFullYear()
+        const month = (monthHeader.getMonth() + 1).toString().padStart(2, '0')
+        return `${year}-${month}`
+      }
+
       const header = monthHeader.toString().trim()
-      
+
+      // Check if it's an Excel serial date number (positive number > 1000)
+      if (!isNaN(monthHeader) && monthHeader > 1000) {
+        try {
+          // Excel serial date: days since 1900-01-01
+          const excelEpoch = new Date(1900, 0, 1)
+          const daysOffset = monthHeader - 2 // Excel incorrectly treats 1900 as a leap year
+          const date = new Date(excelEpoch.getTime() + daysOffset * 24 * 60 * 60 * 1000)
+
+          const year = date.getFullYear()
+          const month = (date.getMonth() + 1).toString().padStart(2, '0')
+          return `${year}-${month}`
+        } catch (e) {
+          // If date conversion fails, continue with string parsing
+        }
+      }
+
       // Try to parse various formats like "Jan/2023", "January 2023", "01/2023", etc.
       const patterns = [
         /^(\w{3})\/(\d{4})$/i,  // Jan/2023
         /^(\w{3})\s+(\d{4})$/i, // Jan 2023
         /^(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
         /^(\w+)\s+(\d{4})$/i,    // January 2023
-        /^'(\w{3})\/(\d{4})$/i,  // Jan/2023
-        /^'(\w{3})\s+(\d{4})$/i, // Jan 2023
-        /^'(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
-        /^'(\w+)\s+(\d{4})$/i    // January 2023
+        /^'(\w{3})\/(\d{4})$/i,  // 'Jan/2023
+        /^'(\w{3})\s+(\d{4})$/i, // 'Jan 2023
+        /^'(\d{1,2})\/(\d{4})$/,  // '1/2023 or '01/2023
+        /^'(\w+)\s+(\d{4})$/i    // 'January 2023
       ]
-      
+
       for (const pattern of patterns) {
         const match = header.match(pattern)
         if (match) {
           let month = match[1]
           const year = match[2]
-          
+
           // Convert month name to number
           if (isNaN(month)) {
             const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
                               'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
             const fullMonthNames = ['january', 'february', 'march', 'april', 'may', 'june',
                                    'july', 'august', 'september', 'october', 'november', 'december']
-            
+
             const shortIndex = monthNames.indexOf(month.toLowerCase().substring(0, 3))
             const fullIndex = fullMonthNames.indexOf(month.toLowerCase())
-            
+
             if (shortIndex !== -1) {
               month = (shortIndex + 1).toString().padStart(2, '0')
             } else if (fullIndex !== -1) {
@@ -537,11 +565,11 @@ export default {
           } else {
             month = parseInt(month).toString().padStart(2, '0')
           }
-          
+
           return `${year}-${month}`
         }
       }
-      
+
       return null
     },
     
@@ -735,6 +763,14 @@ export default {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2
       }).format(amount)
+    }
+  },
+  async mounted() {
+    // Reload category types on mount to ensure we have the latest
+    try {
+      await store.loadCategoryTypes()
+    } catch (error) {
+      console.error('Failed to load category types:', error)
     }
   }
 }

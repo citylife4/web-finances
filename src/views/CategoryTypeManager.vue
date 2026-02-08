@@ -157,7 +157,7 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { store } from '../store/api-store'
 
 export default {
@@ -172,6 +172,15 @@ export default {
     })
 
     const editingType = ref(null)
+
+    // Reload data on mount to get latest category types
+    onMounted(async () => {
+      try {
+        await store.loadCategoryTypes()
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      }
+    })
 
     const addCategoryType = async () => {
       try {

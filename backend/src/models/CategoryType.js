@@ -33,7 +33,4 @@ const categoryTypeSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for performance
-categoryTypeSchema.index({ name: 1 });
-
 module.exports = mongoose.model('CategoryType', categoryTypeSchema);

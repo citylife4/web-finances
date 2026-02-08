@@ -192,7 +192,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { store } from '../store/api-store'
 
 export default {
@@ -206,6 +206,19 @@ export default {
     })
 
     const editingAccount = ref(null)
+
+    // Reload data on mount to get latest category types, accounts, and categories
+    onMounted(async () => {
+      try {
+        await Promise.all([
+          store.loadCategoryTypes(),
+          store.loadAccounts(),
+          store.loadCategories()
+        ])
+      } catch (error) {
+        console.error('Failed to load data:', error)
+      }
+    })
 
     const availableCategories = computed(() => {
       if (!newAccount.value.typeId) return []

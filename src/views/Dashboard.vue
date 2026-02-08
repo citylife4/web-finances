@@ -324,6 +324,10 @@ export default {
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
           scales: {
             y: {
               beginAtZero: true,
@@ -336,6 +340,9 @@ export default {
           },
           plugins: {
             tooltip: {
+              enabled: true,
+              position: 'nearest',
+              yAlign: 'bottom',
               callbacks: {
                 label: function(context) {
                   return context.dataset.label + ': ' + new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed.y)
@@ -448,11 +455,18 @@ export default {
     }
 
     onMounted(async () => {
-      // Ensure store is initialized (in case user navigates directly to dashboard)
-      if (store.accounts.length === 0 && store.categories.length === 0) {
-        await store.initialize()
+      // Always reload data to ensure we have the latest category types, categories, and accounts
+      try {
+        await Promise.all([
+          store.loadCategoryTypes(),
+          store.loadAccounts(),
+          store.loadCategories(),
+          store.loadEntries()
+        ])
+      } catch (error) {
+        console.error('Failed to load data:', error)
       }
-      
+
       await createProgressionChart()
       createBreakdownChart()
       createCategoryChart()
@@ -552,9 +566,10 @@ export default {
 .chart-container {
   background: white;
   border-radius: 15px;
-  padding: 2rem;
+  padding: 2rem 2rem 3rem 2rem;
   box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  height: 400px;
+  min-height: 450px;
+  position: relative;
 }
 
 .chart-container h3 {
@@ -564,7 +579,8 @@ export default {
 }
 
 .chart-container canvas {
-  height: 300px !important;
+  max-height: 350px !important;
+  height: 350px !important;
 }
 
 .recent-entries {

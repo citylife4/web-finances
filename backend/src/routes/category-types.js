@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { CategoryType, Category, Account } = require('../models');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 // Get all category types
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
     const types = await CategoryType.find().sort({ name: 1 });
     res.json(types);
@@ -15,7 +15,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get a single category type
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
   try {
     const type = await CategoryType.findById(req.params.id);
     if (!type) {
@@ -29,7 +29,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create a new category type
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticate, async (req, res) => {
   try {
     const { name, displayName, description, color, icon } = req.body;
 
@@ -64,7 +64,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Update a category type
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   try {
     const { displayName, description, color, icon } = req.body;
     
@@ -93,7 +93,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete a category type
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
   try {
     const type = await CategoryType.findById(req.params.id);
     if (!type) {
