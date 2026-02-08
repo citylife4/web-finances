@@ -28,6 +28,42 @@ make prod
 docker-compose up -d --build
 ```
 
+### 🔋 Low-Memory VPS (1GB RAM)
+
+If you're deploying to a small VPS with limited resources (e.g., 1GB RAM), use the optimized configuration:
+
+```bash
+# Start production with memory limits
+make prod-lowmem
+
+# Or manually with docker-compose
+docker-compose -f docker-compose.yml -f docker-compose.lowmem.yml up -d --build
+```
+
+**Optimizations applied:**
+- ✅ TypeScript type-checking skipped during Docker build
+- ✅ Node.js heap limited to 512MB during build, 256MB at runtime
+- ✅ MongoDB WiredTiger cache limited to 256MB
+- ✅ Source maps disabled to reduce memory usage
+- ✅ Container memory limits enforced:
+  - MongoDB: 384MB limit
+  - Backend: 384MB limit  
+  - Frontend (nginx): 256MB limit
+
+**Build Tips:**
+- Build may take 2-5 minutes on 1 CPU systems
+- If build still fails, try building locally and pushing images to a registry
+- Ensure swap is enabled on your VPS (recommended: 1GB swap)
+
+**Enable swap on Ubuntu/Debian:**
+```bash
+sudo fallocate -l 1G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
 ## 📁 File Structure
 
 ```
@@ -62,6 +98,7 @@ docker-compose up -d --build
 make help         # Show all available commands
 make dev          # Start development environment
 make prod         # Start production environment
+make prod-lowmem  # Start production on low-memory VPS (1GB RAM)
 make build        # Build all Docker images
 make up           # Start all services
 make down         # Stop all services

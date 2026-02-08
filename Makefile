@@ -1,18 +1,19 @@
 # Makefile for Finance Tracker Docker Management
 
-.PHONY: help build up down dev prod logs clean reset
+.PHONY: help build up down dev prod prod-lowmem logs clean reset
 
 # Default target
 help:
 	@echo "Finance Tracker Docker Commands:"
-	@echo "  make dev      - Start development environment"
-	@echo "  make prod     - Start production environment"
-	@echo "  make build    - Build all Docker images"
-	@echo "  make up       - Start all services"
-	@echo "  make down     - Stop all services"
-	@echo "  make logs     - View logs from all services"
-	@echo "  make clean    - Remove all containers and images"
-	@echo "  make reset    - Reset everything (clean + rebuild)"
+	@echo "  make dev         - Start development environment"
+	@echo "  make prod        - Start production environment"
+	@echo "  make prod-lowmem - Start production on low-memory VPS (1GB RAM)"
+	@echo "  make build       - Build all Docker images"
+	@echo "  make up          - Start all services"
+	@echo "  make down        - Stop all services"
+	@echo "  make logs        - View logs from all services"
+	@echo "  make clean       - Remove all containers and images"
+	@echo "  make reset       - Reset everything (clean + rebuild)"
 
 # Development environment
 dev:
@@ -29,6 +30,19 @@ prod:
 	@echo "Frontend: http://localhost:80"
 	@echo "Backend: http://localhost:3001"
 	@echo "MongoDB: localhost:27019"
+
+# Production environment for low-memory VPS (1GB RAM)
+prod-lowmem:
+	docker-compose -f docker-compose.yml -f docker-compose.lowmem.yml up -d --build
+	@echo "Production environment started (low-memory mode)!"
+	@echo "Frontend: http://localhost:80"
+	@echo "Backend: http://localhost:3001"
+	@echo "MongoDB: localhost:27019"
+	@echo ""
+	@echo "Note: Memory limits applied for 1GB RAM systems"
+	@echo "  MongoDB: 384MB limit (256MB WiredTiger cache)"
+	@echo "  Backend: 384MB limit (256MB Node.js heap)"
+	@echo "  Frontend: 256MB limit"
 
 # Build all images
 build:

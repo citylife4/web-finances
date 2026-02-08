@@ -10,15 +10,17 @@ ARG VITE_API_URL=/api
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies with memory limit for low-resource VPS
 # Note: Using npm install instead of npm ci due to compatibility issues with npm 11.6.2
-RUN npm install
+RUN NODE_OPTIONS="--max-old-space-size=512" npm install --prefer-offline --no-audit
 
 # Copy source code
 COPY . .
 
 # Build the application with API URL
-RUN VITE_API_URL=${VITE_API_URL} npm run build
+# Limit Node.js memory to 512MB for low-resource VPS
+# Skip TypeScript checking in Docker builds to reduce memory usage
+RUN NODE_OPTIONS="--max-old-space-size=512" VITE_API_URL=${VITE_API_URL} npm run build:docker
 
 # Production stage with nginx
 FROM nginx:alpine as production
