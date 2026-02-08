@@ -13,7 +13,7 @@ The new system allows users to create custom category types beyond just "deposit
 
 ## Prerequisites
 
-- Node.js v20.19.0 or higher
+- Node.js v24 or higher
 - Running MongoDB instance
 - Access to the application database
 

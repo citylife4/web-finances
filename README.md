@@ -45,7 +45,7 @@ make prod
 ### Option 2: Manual Setup
 
 #### Prerequisites
-- Node.js (v20.19.0 or higher recommended)
+- Node.js (v24 or higher recommended)
 - npm
 - MongoDB
 

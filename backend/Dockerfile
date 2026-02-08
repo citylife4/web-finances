@@ -1,5 +1,5 @@
 # Backend Dockerfile
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Set working directory
 WORKDIR /app
@@ -8,7 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+# Note: Using npm install instead of npm ci due to compatibility issues with npm 11.6.2
+RUN npm install --omit=dev
 
 # Copy source code
 COPY src/ ./src/
@@ -25,12 +26,9 @@ USER backend
 # Expose port
 EXPOSE 3001
 
-# Start command
-CMD ["node", "src/server.js"]
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node healthcheck.js
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]

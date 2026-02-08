@@ -138,7 +138,7 @@ Currently no test suite configured. Consider adding:
 - Cypress for E2E tests
 
 ## Prerequisites
-- Node.js v20.19.0 or higher (recommended)
+- Node.js v24 or higher (recommended)
 - npm
 - MongoDB (local or Docker)
 - Docker & Docker Compose (optional)

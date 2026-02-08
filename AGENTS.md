@@ -31,7 +31,7 @@ A Vue.js 3 + Express.js financial account tracking application for monitoring we
 
 ### Prerequisites
 
-- Node.js v20.19.0 or higher
+- Node.js v24 or higher
 - npm
 - MongoDB (local installation or Docker)
 - Docker & Docker Compose (optional, for containerized development)
