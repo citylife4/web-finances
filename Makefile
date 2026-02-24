@@ -93,15 +93,15 @@ reset: clean build dev
 
 # Database operations
 db-reset:
-	docker-compose down mongodb
+	docker-compose stop mongodb
 	docker volume rm finance-tracker_mongodb_data finance-tracker_mongodb_data_dev 2>/dev/null || true
 	docker-compose up -d mongodb
 
 # Health check
 health:
 	@echo "Checking service health..."
-	@curl -f http://localhost:3001/api/health && echo "Backend: OK" || echo "Backend: Failed"
-	@curl -f http://localhost:5173 && echo "Frontend: OK" || echo "Frontend: Failed"
+	@curl -sf http://localhost:3001/api/health && echo " Backend: OK" || echo "Backend: Failed"
+	@curl -sf http://localhost:80 > /dev/null && echo "Frontend: OK" || echo "Frontend: Failed"
 
 # Enter containers for debugging
 shell-backend:

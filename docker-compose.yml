@@ -1,22 +1,25 @@
 services:
-  # MongoDB Database
   mongodb:
     image: mongo:7
     container_name: finance-tracker-mongo
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Set MONGO_PASSWORD in .env}
       MONGO_INITDB_DATABASE: finance-tracker
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
       - ./mongo-init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: mongosh --eval "db.adminCommand('ping')" --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - finance-tracker-network
 
-  # Backend API
   backend:
     build:
       context: ./backend
@@ -25,17 +28,19 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      MONGODB_URI: mongodb://admin:password123@mongodb:27017/finance-tracker?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_USERNAME:-admin}:${MONGO_PASSWORD}@mongodb:27017/finance-tracker?authSource=admin
       PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env}
       CORS_ORIGINS: http://localhost,http://localhost:80
     ports:
       - "3001:3001"
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - finance-tracker-network
 
-  # Frontend (Vue.js)
   frontend:
     build:
       context: .

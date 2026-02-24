@@ -255,7 +255,7 @@
 <script>
 import * as XLSX from 'xlsx'
 import { store } from '../store/api-store'
-import { downloadExampleXLSX } from '../utils/exampleFile'
+import { downloadExampleXLSX } from '../utils/exampleXlsx'
 
 export default {
   name: 'ImportData',
@@ -348,7 +348,6 @@ export default {
         }
         
       } catch (error) {
-        console.error('Parse error:', error)
         this.error = `Failed to parse file: ${error.message}`
         this.isProcessing = false
       }
@@ -362,7 +361,6 @@ export default {
       try {
         await this.processSelectedSheet()
       } catch (error) {
-        console.error('Parse error:', error)
         this.error = `Failed to parse sheet: ${error.message}`
       } finally {
         this.isProcessing = false
@@ -379,17 +377,11 @@ export default {
       // Convert to JSON with header row
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
       
-      console.log('📊 Sheet data:', jsonData)
-      console.log('📊 Total rows:', jsonData.length)
-      console.log('📊 First row (headers):', jsonData[0])
-      console.log('📊 Second row (first data):', jsonData[1])
-      
       if (jsonData.length < 2) {
         throw new Error(`Selected sheet must have at least 2 rows (header row and data rows). Found ${jsonData.length} row(s).`)
       }
       
       const parsedData = this.parseReverseTableData(jsonData)
-      console.log('📊 Parsed data:', parsedData)
       this.previewData = await this.preparePreviewData(parsedData)
     },
     
@@ -402,9 +394,6 @@ export default {
         .map(h => (h === undefined || h === null) ? '' : String(h))
         .map(h => h.trim())
         .filter(h => h)
-      
-      console.log('📋 Parsed headers:', headers)
-      console.log('📋 Headers count:', headers.length)
       
       if (headers.length === 0) {
         throw new Error('No month/year columns found. Make sure your data has columns after the first 3 (Bank/Wallet, Type, Category).')
@@ -420,16 +409,12 @@ export default {
         const accountType = row[1]
         const subTypeOrCategory = row[2]
         
-        console.log(`Row ${rowIndex}:`, { accountName, accountType, subTypeOrCategory, rowLength: row.length })
-        
         if (!accountName || accountName.trim() === '') {
-          console.log(`Skipping row ${rowIndex}: empty account name`)
-          continue // Skip empty rows
+          continue
         }
         
         if (!accountType || !subTypeOrCategory) {
-          console.log(`Skipping row ${rowIndex}: missing type or category`)
-          continue // Skip rows without type or sub-type/category
+          continue
         }
         
         // Validate account type - find matching category type
@@ -437,8 +422,6 @@ export default {
         const matchingType = store.categoryTypes.find(t => t.name === normalizedType)
         
         if (!matchingType) {
-          const availableTypes = store.categoryTypes.map(t => t.name).join(', ')
-          console.warn(`Invalid account type '${accountType}' for account '${accountName}'. Must be one of: ${availableTypes}`)
           continue
         }
         
@@ -493,10 +476,6 @@ export default {
           })
         }
       }
-      
-      console.log('✅ Parsing complete:', { accountsCount: accounts.length, entriesCount: entries.length })
-      console.log('✅ Accounts:', accounts)
-      console.log('✅ Entries sample:', entries.slice(0, 5))
       
       return { accounts, entries }
     },
@@ -632,9 +611,7 @@ export default {
                     typeId: accountData.typeId,
                     description: `Imported from XLSX`
                   })
-                  console.log('Created category:', existingCategory)
                 } catch (error) {
-                  console.warn(`Failed to create category '${accountData.categoryName}':`, error)
                   continue
                 }
               }
@@ -666,7 +643,6 @@ export default {
             const categoryId = categoryMap.get(categoryKey)
             
             if (!categoryId) {
-              console.warn(`No category ID found for ${accountData.categoryName}`)
               continue
             }
             
@@ -677,7 +653,6 @@ export default {
             }
             
             account = await store.addAccount(accountPayload)
-            console.log('Created account:', account)
           }
           
           if (account && account._id) {
@@ -698,13 +673,8 @@ export default {
               month: entryData.month,
               amount: entryData.amount
             })
-          } else {
-            console.warn(`No account ID found for entry:`, entryData)
           }
         }
-        
-        console.log('📊 Prepared entries for import:', entries)
-        console.log('📊 Total entries:', entries.length)
         
         if (entries.length > 0) {
           await store.saveMonthlyEntries(entries)
@@ -723,7 +693,6 @@ export default {
         this.clearPreview()
         
       } catch (error) {
-        console.error('Import error:', error)
         this.error = `Failed to import data: ${error.message}`
       } finally {
         this.importing = false
@@ -770,7 +739,7 @@ export default {
     try {
       await store.loadCategoryTypes()
     } catch (error) {
-      console.error('Failed to load category types:', error)
+      // ignored — store handles errors
     }
   }
 }

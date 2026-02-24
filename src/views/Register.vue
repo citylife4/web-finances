@@ -135,7 +135,6 @@ export default {
         this.$router.push('/')
       } catch (error) {
         this.error = error.response?.data?.error || 'Registration failed. Please try again.'
-        console.error('Registration error:', error)
       } finally {
         this.loading = false
       }

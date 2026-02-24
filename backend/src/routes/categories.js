@@ -1,15 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { Category, CategoryType, Account } = require('../models');
 const { authenticate } = require('../middleware/auth');
 
-// Apply authentication to all routes
 router.use(authenticate);
 
-// GET /api/categories - Get all categories with type population
 router.get('/', async (req, res) => {
   try {
-    const categories = await Category.find()
+    const categories = await Category.find({ userId: req.userId })
       .populate('typeId', 'name displayName color')
       .sort({ typeId: 1, name: 1 });
     res.json(categories);
@@ -18,18 +17,20 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/categories/type/:typeId - Get categories by type ID
 router.get('/type/:typeId', async (req, res) => {
   try {
     const { typeId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(typeId)) {
+      return res.status(400).json({ error: 'Invalid typeId' });
+    }
     
-    // Verify the type exists
     const categoryType = await CategoryType.findById(typeId);
     if (!categoryType) {
       return res.status(404).json({ error: 'Category type not found' });
     }
     
-    const categories = await Category.find({ typeId })
+    const categories = await Category.find({ typeId, userId: req.userId })
       .populate('typeId', 'name displayName color')
       .sort({ name: 1 });
     res.json(categories);
@@ -38,18 +39,16 @@ router.get('/type/:typeId', async (req, res) => {
   }
 });
 
-// GET /api/categories/by-name/:typeName - Get categories by type name (backward compatibility)
 router.get('/by-name/:typeName', async (req, res) => {
   try {
     const { typeName } = req.params;
     
-    // Find the type by name
     const categoryType = await CategoryType.findOne({ name: typeName.toLowerCase() });
     if (!categoryType) {
       return res.status(404).json({ error: 'Category type not found' });
     }
     
-    const categories = await Category.find({ typeId: categoryType._id })
+    const categories = await Category.find({ typeId: categoryType._id, userId: req.userId })
       .populate('typeId', 'name displayName color')
       .sort({ name: 1 });
     res.json(categories);
@@ -58,7 +57,6 @@ router.get('/by-name/:typeName', async (req, res) => {
   }
 });
 
-// POST /api/categories - Create a new category
 router.post('/', async (req, res) => {
   try {
     const { name, typeId, description } = req.body;
@@ -66,17 +64,20 @@ router.post('/', async (req, res) => {
     if (!name || !typeId) {
       return res.status(400).json({ error: 'Name and typeId are required' });
     }
+
+    if (!mongoose.Types.ObjectId.isValid(typeId)) {
+      return res.status(400).json({ error: 'Invalid typeId' });
+    }
     
-    // Verify the type exists
     const categoryType = await CategoryType.findById(typeId);
     if (!categoryType) {
       return res.status(400).json({ error: 'Invalid category type' });
     }
     
     const category = new Category({
+      userId: req.userId,
       name: name.trim(),
       typeId,
-      type: categoryType.name, // Keep for backward compatibility
       description: description?.trim()
     });
     
@@ -94,27 +95,31 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/categories/:id - Update a category
 router.put('/:id', async (req, res) => {
   try {
     const { name, typeId, description } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid category ID' });
+    }
 
     const updateData = {};
     if (name) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim();
 
-    // If typeId is being changed, verify it exists and update the type field
     if (typeId) {
+      if (!mongoose.Types.ObjectId.isValid(typeId)) {
+        return res.status(400).json({ error: 'Invalid typeId' });
+      }
       const categoryType = await CategoryType.findById(typeId);
       if (!categoryType) {
         return res.status(400).json({ error: 'Invalid category type' });
       }
       updateData.typeId = typeId;
-      updateData.type = categoryType.name; // Keep for backward compatibility
     }
 
-    const category = await Category.findByIdAndUpdate(
-      req.params.id,
+    const category = await Category.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       updateData,
       { new: true, runValidators: true }
     ).populate('typeId', 'name displayName color');
@@ -123,10 +128,9 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    // If typeId was changed, cascade the update to all accounts using this category
     if (typeId) {
       await Account.updateMany(
-        { categoryId: req.params.id },
+        { categoryId: req.params.id, userId: req.userId },
         { typeId: typeId }
       );
     }
@@ -143,11 +147,13 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/categories/:id - Delete a category
 router.delete('/:id', async (req, res) => {
   try {
-    // Check if any accounts use this category
-    const accountCount = await Account.countDocuments({ categoryId: req.params.id });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid category ID' });
+    }
+
+    const accountCount = await Account.countDocuments({ categoryId: req.params.id, userId: req.userId });
     
     if (accountCount > 0) {
       return res.status(409).json({ 
@@ -155,7 +161,7 @@ router.delete('/:id', async (req, res) => {
       });
     }
     
-    const category = await Category.findByIdAndDelete(req.params.id);
+    const category = await Category.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });

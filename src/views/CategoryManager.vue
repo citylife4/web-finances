@@ -109,23 +109,39 @@
               <p class="meta">Created: {{ formatDate(category.createdAt) }}</p>
               <div class="card-actions">
                 <button @click="editCategory(category)" class="btn btn-secondary btn-small">Edit</button>
-                <button @click="deleteCategory(category._id)" class="btn btn-danger btn-small">Delete</button>
+                <button @click="showDeleteConfirm(category._id)" class="btn btn-danger btn-small">Delete</button>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :visible="confirmDelete.visible"
+      title="Delete Category"
+      message="Are you sure you want to delete this category? This action cannot be undone."
+      confirmText="Delete"
+      :dangerous="true"
+      @confirm="deleteCategory"
+      @cancel="confirmDelete.visible = false"
+    />
   </div>
 </template>
 
 <script>
 import { ref, onMounted } from 'vue'
 import { store } from '../store/api-store'
+import ConfirmModal from '../components/ConfirmModal.vue'
+import { useToast } from '../components/ToastContainer.vue'
+import { formatDate } from '../utils/formatters'
 
 export default {
   name: 'CategoryManager',
+  components: { ConfirmModal },
   setup() {
+    const toast = useToast()
+    const confirmDelete = ref({ visible: false, categoryId: null })
     const newCategory = ref({
       name: '',
       typeId: '',
@@ -142,7 +158,7 @@ export default {
           store.loadCategories()
         ])
       } catch (error) {
-        console.error('Failed to load data:', error)
+        // ignored — store handles errors
       }
     })
 
@@ -161,8 +177,7 @@ export default {
           description: ''
         }
       } catch (error) {
-        // Error is handled by the store
-        console.error('Failed to add category:', error)
+        toast.error('Failed to add category.')
       }
     }
 
@@ -185,17 +200,22 @@ export default {
         await store.loadAccounts()
         editingCategory.value = null
       } catch (error) {
-        console.error('Failed to update category:', error)
+        toast.error('Failed to update category.')
       }
     }
 
-    const deleteCategory = async (id) => {
-      if (confirm('Are you sure you want to delete this category? This action cannot be undone.')) {
-        try {
-          await store.deleteCategory(id)
-        } catch (error) {
-          console.error('Failed to delete category:', error)
-        }
+    const showDeleteConfirm = (id) => {
+      confirmDelete.value = { visible: true, categoryId: id }
+    }
+
+    const deleteCategory = async () => {
+      const id = confirmDelete.value.categoryId
+      confirmDelete.value = { visible: false, categoryId: null }
+      try {
+        await store.deleteCategory(id)
+        toast.success('Category deleted.')
+      } catch (error) {
+        toast.error('Failed to delete category.')
       }
     }
 
@@ -203,18 +223,16 @@ export default {
       editingCategory.value = null
     }
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString()
-    }
-
     return {
       store,
       newCategory,
       editingCategory,
+      confirmDelete,
       getCategoriesByTypeId,
       addCategory,
       editCategory,
       updateCategory,
+      showDeleteConfirm,
       deleteCategory,
       cancelEdit,
       formatDate
@@ -227,41 +245,40 @@ export default {
 .category-manager {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+  padding: 2rem;
 }
 
 .page-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 3rem;
 }
 
 .page-header h2 {
-  color: white;
+  margin: 0;
   font-size: 2.5rem;
-  margin-bottom: 10px;
-  font-weight: 300;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
-  margin: 0;
+  color: #666;
+  margin-top: 0.5rem;
 }
 
 .add-category-section {
   background: white;
-  border-radius: 12px;
-  padding: 30px;
-  margin-bottom: 40px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-radius: 15px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .add-category-section h3 {
-  margin-bottom: 20px;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
   color: #333;
-  text-align: center;
 }
 
 .add-form {
@@ -272,25 +289,24 @@ export default {
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 1.5rem;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #555;
+  font-weight: 600;
+  color: #333;
 }
 
 .form-group input,
 .form-group select {
-  width: 100%;
-  padding: 12px;
+  padding: 0.75rem;
   border: 2px solid #e1e5e9;
   border-radius: 8px;
   font-size: 1rem;
@@ -304,15 +320,13 @@ export default {
 }
 
 .btn {
-  padding: 12px 24px;
+  padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
 }
 
 .btn-primary {
@@ -322,7 +336,7 @@ export default {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
 .btn-secondary {
@@ -331,7 +345,7 @@ export default {
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: #5a6268;
 }
 
 .btn-danger {
@@ -344,83 +358,86 @@ export default {
 }
 
 .btn-small {
-  padding: 6px 12px;
+  padding: 0.4rem 0.75rem;
   font-size: 0.875rem;
 }
 
 .categories-list {
   display: grid;
-  gap: 40px;
+  gap: 2rem;
+}
+
+.category-section {
+  background: white;
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .category-section h3 {
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-  text-align: center;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+  font-size: 1.3rem;
 }
 
 .no-categories {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 40px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
+  color: #666;
+  padding: 2rem;
 }
 
 .categories-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  gap: 1.25rem;
 }
 
 .category-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
+  padding: 1.25rem;
+  border-radius: 10px;
+  border-left: 4px solid #667eea;
+  background: #f8f9fa;
+  transition: transform 0.3s;
 }
 
 .category-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateX(5px);
 }
 
 .category-info h4 {
-  margin: 0 0 10px 0;
+  margin: 0 0 0.5rem;
   color: #333;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
 }
 
 .description {
-  color: #666;
-  margin: 10px 0;
+  color: #888;
+  margin: 0.5rem 0;
   font-style: italic;
 }
 
 .meta {
   color: #999;
   font-size: 0.875rem;
-  margin: 10px 0;
+  margin: 0.5rem 0;
 }
 
 .card-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .edit-form .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 1rem;
 }
 
 .edit-form input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
   font-size: 0.9rem;
 }
 
@@ -428,13 +445,17 @@ export default {
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .categories-grid {
     grid-template-columns: 1fr;
   }
-  
-  .card-actions {
-    flex-direction: column;
+
+  .category-manager {
+    padding: 1rem;
+  }
+
+  .page-header h2 {
+    font-size: 2rem;
   }
 }
 </style>

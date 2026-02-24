@@ -1,27 +1,20 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const { JWT_SECRET, JWT_REFRESH_SECRET, ACCESS_TOKEN_EXPIRY, REFRESH_TOKEN_EXPIRY_DAYS, isProduction } = require('../config');
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-token-secret-change-in-production';
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY_DAYS = 7;
-
-// Generate access token
 const generateAccessToken = (userId) => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
 };
 
-// Generate refresh token
 const generateRefreshToken = (userId) => {
   return jwt.sign({ userId, type: 'refresh' }, JWT_REFRESH_SECRET, { 
     expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d` 
   });
 };
 
-// Validate password requirements
 const validatePassword = (password) => {
   if (!password || password.length < 8) {
     return 'Password must be at least 8 characters long';
@@ -35,7 +28,7 @@ const validatePassword = (password) => {
   return null;
 };
 
-// POST /api/auth/register - Register new user
+// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     const { email, password, name } = req.body;
@@ -50,13 +43,11 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: passwordError });
     }
     
-    // Check if user exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(409).json({ error: 'Email already registered' });
     }
     
-    // Create user
     const user = new User({
       email: email.toLowerCase(),
       password,
@@ -93,7 +84,7 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - Login user
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -102,7 +93,6 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     
-    // Find user
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -113,24 +103,20 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Account is deactivated' });
     }
     
-    // Verify password
     const isValidPassword = await user.comparePassword(password);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
     
-    // Generate tokens
     const accessToken = generateAccessToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
     
-    // Store refresh token
     user.addRefreshToken(refreshToken, REFRESH_TOKEN_EXPIRY_DAYS);
     await user.save();
     
-    // Set refresh token in httpOnly cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'strict',
       maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
     });
@@ -146,7 +132,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/refresh - Refresh access token
 router.post('/refresh', async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
@@ -163,7 +148,6 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
     
-    // Find user and verify refresh token is stored
     const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -173,25 +157,23 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'Account is deactivated' });
     }
     
-    // Check if refresh token exists in user's tokens
+    // Check if refresh token exists
     const tokenExists = user.refreshTokens.some(t => t.token === refreshToken);
     if (!tokenExists) {
       return res.status(401).json({ error: 'Refresh token not recognized' });
     }
     
-    // Generate new tokens (token rotation)
+    // Token rotation
     const newAccessToken = generateAccessToken(user._id);
     const newRefreshToken = generateRefreshToken(user._id);
     
-    // Remove old refresh token and add new one
     user.removeRefreshToken(refreshToken);
     user.addRefreshToken(newRefreshToken, REFRESH_TOKEN_EXPIRY_DAYS);
     await user.save();
     
-    // Set new refresh token in httpOnly cookie
     res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'strict',
       maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
     });
@@ -205,7 +187,7 @@ router.post('/refresh', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout - Logout user
+// POST /api/auth/logout
 router.post('/logout', async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
@@ -224,10 +206,9 @@ router.post('/logout', async (req, res) => {
       }
     }
     
-    // Clear the cookie
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'strict'
     });
     
@@ -238,7 +219,7 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout-all - Logout from all devices
+// POST /api/auth/logout-all
 router.post('/logout-all', async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
@@ -262,10 +243,9 @@ router.post('/logout-all', async (req, res) => {
       await user.save();
     }
     
-    // Clear the cookie
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProduction,
       sameSite: 'strict'
     });
     
@@ -276,7 +256,6 @@ router.post('/logout-all', async (req, res) => {
   }
 });
 
-// GET /api/auth/me - Get current user
 router.get('/me', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;

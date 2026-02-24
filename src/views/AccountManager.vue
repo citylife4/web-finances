@@ -107,7 +107,7 @@
                 <h5>{{ account.name }}</h5>
                 <div class="account-actions">
                   <button @click="editAccount(account)" class="btn-icon">✏️</button>
-                  <button @click="deleteAccount(account._id)" class="btn-icon delete">🗑️</button>
+                  <button @click="showDeleteConfirm(account._id)" class="btn-icon delete">🗑️</button>
                 </div>
               </div>
               <p v-if="account.categoryId" class="account-category">
@@ -188,16 +188,32 @@
         </form>
       </div>
     </div>
+
+    <ConfirmModal
+      :visible="confirmDelete.visible"
+      title="Delete Account"
+      message="Are you sure you want to delete this account? This will also remove all related entries."
+      confirmText="Delete"
+      :dangerous="true"
+      @confirm="deleteAccount"
+      @cancel="confirmDelete.visible = false"
+    />
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
 import { store } from '../store/api-store'
+import ConfirmModal from '../components/ConfirmModal.vue'
+import { useToast } from '../components/ToastContainer.vue'
+import { formatCurrency, formatDate } from '../utils/formatters'
 
 export default {
   name: 'AccountManager',
+  components: { ConfirmModal },
   setup() {
+    const toast = useToast()
+    const confirmDelete = ref({ visible: false, accountId: null })
     const newAccount = ref({
       name: '',
       typeId: '',
@@ -216,7 +232,7 @@ export default {
           store.loadCategories()
         ])
       } catch (error) {
-        console.error('Failed to load data:', error)
+        // ignored — store handles errors
       }
     })
 
@@ -239,9 +255,7 @@ export default {
 
     const addAccount = async () => {
       try {
-        console.log('Adding account:', newAccount.value)
         await store.addAccount({ ...newAccount.value })
-        console.log('Account added successfully')
         
         // Reset form
         newAccount.value = {
@@ -251,8 +265,7 @@ export default {
           description: ''
         }
       } catch (error) {
-        console.error('Failed to add account:', error)
-        alert('Failed to add account. Please try again.')
+        toast.error('Failed to add account. Please try again.')
       }
     }
 
@@ -274,8 +287,7 @@ export default {
         })
         editingAccount.value = null
       } catch (error) {
-        console.error('Failed to update account:', error)
-        alert('Failed to update account. Please try again.')
+        toast.error('Failed to update account. Please try again.')
       }
     }
 
@@ -283,14 +295,18 @@ export default {
       editingAccount.value = null
     }
 
-    const deleteAccount = async (accountId) => {
-      if (confirm('Are you sure you want to delete this account? This will also remove all related entries.')) {
-        try {
-          await store.deleteAccount(accountId)
-        } catch (error) {
-          console.error('Failed to delete account:', error)
-          alert('Failed to delete account. Please try again.')
-        }
+    const showDeleteConfirm = (accountId) => {
+      confirmDelete.value = { visible: true, accountId }
+    }
+
+    const deleteAccount = async () => {
+      const accountId = confirmDelete.value.accountId
+      confirmDelete.value = { visible: false, accountId: null }
+      try {
+        await store.deleteAccount(accountId)
+        toast.success('Account deleted.')
+      } catch (error) {
+        toast.error('Failed to delete account. Please try again.')
       }
     }
 
@@ -302,14 +318,11 @@ export default {
       return entries.length > 0 ? entries[0].amount : 0
     }
 
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
-    }
-
     return {
       store,
       newAccount,
       editingAccount,
+      confirmDelete,
       availableCategories,
       getEditCategories,
       getAccountsByType,
@@ -317,6 +330,7 @@ export default {
       editAccount,
       updateAccount,
       cancelEdit,
+      showDeleteConfirm,
       deleteAccount,
       getLatestValue,
       formatCurrency

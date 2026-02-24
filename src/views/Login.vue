@@ -77,7 +77,6 @@ export default {
         this.$router.push('/')
       } catch (error) {
         this.error = error.response?.data?.error || 'Login failed. Please try again.'
-        console.error('Login error:', error)
       } finally {
         this.loading = false
       }

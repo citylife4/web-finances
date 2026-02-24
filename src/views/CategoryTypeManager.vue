@@ -143,7 +143,7 @@
               <button @click="editCategoryType(type)" class="btn btn-secondary btn-small">Edit</button>
               <button 
                 v-if="!type.isSystem"
-                @click="deleteCategoryType(type._id)" 
+                @click="showDeleteConfirm(type._id)" 
                 class="btn btn-danger btn-small"
               >
                 Delete
@@ -153,16 +153,32 @@
         </div>
       </div>
     </div>
+
+    <ConfirmModal
+      :visible="confirmDelete.visible"
+      title="Delete Category Type"
+      message="Are you sure you want to delete this category type? This will only work if no categories or accounts are using it."
+      confirmText="Delete"
+      :dangerous="true"
+      @confirm="deleteCategoryType"
+      @cancel="confirmDelete.visible = false"
+    />
   </div>
 </template>
 
 <script>
 import { ref, onMounted } from 'vue'
 import { store } from '../store/api-store'
+import ConfirmModal from '../components/ConfirmModal.vue'
+import { useToast } from '../components/ToastContainer.vue'
+import { formatDate } from '../utils/formatters'
 
 export default {
   name: 'CategoryTypeManager',
+  components: { ConfirmModal },
   setup() {
+    const toast = useToast()
+    const confirmDelete = ref({ visible: false, typeId: null })
     const newType = ref({
       name: '',
       displayName: '',
@@ -178,7 +194,7 @@ export default {
       try {
         await store.loadCategoryTypes()
       } catch (error) {
-        console.error('Failed to load data:', error)
+        // ignored — store handles errors
       }
     })
 
@@ -204,7 +220,7 @@ export default {
           icon: ''
         }
       } catch (error) {
-        console.error('Failed to add category type:', error)
+        toast.error('Failed to add category type.')
       }
     }
 
@@ -222,17 +238,22 @@ export default {
         })
         editingType.value = null
       } catch (error) {
-        console.error('Failed to update category type:', error)
+        toast.error('Failed to update category type.')
       }
     }
 
-    const deleteCategoryType = async (id) => {
-      if (confirm('Are you sure you want to delete this category type? This action cannot be undone and will only work if no categories or accounts are using this type.')) {
-        try {
-          await store.deleteCategoryType(id)
-        } catch (error) {
-          console.error('Failed to delete category type:', error)
-        }
+    const showDeleteConfirm = (id) => {
+      confirmDelete.value = { visible: true, typeId: id }
+    }
+
+    const deleteCategoryType = async () => {
+      const id = confirmDelete.value.typeId
+      confirmDelete.value = { visible: false, typeId: null }
+      try {
+        await store.deleteCategoryType(id)
+        toast.success('Category type deleted.')
+      } catch (error) {
+        toast.error('Failed to delete category type.')
       }
     }
 
@@ -240,17 +261,15 @@ export default {
       editingType.value = null
     }
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString()
-    }
-
     return {
       store,
       newType,
       editingType,
+      confirmDelete,
       addCategoryType,
       editCategoryType,
       updateCategoryType,
+      showDeleteConfirm,
       deleteCategoryType,
       cancelEdit,
       formatDate
@@ -263,41 +282,40 @@ export default {
 .category-type-manager {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
+  padding: 2rem;
 }
 
 .page-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 3rem;
 }
 
 .page-header h2 {
-  color: white;
+  margin: 0;
   font-size: 2.5rem;
-  margin-bottom: 10px;
-  font-weight: 300;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
-  margin: 0;
+  color: #666;
+  margin-top: 0.5rem;
 }
 
 .add-type-section {
   background: white;
-  border-radius: 12px;
-  padding: 30px;
-  margin-bottom: 40px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-radius: 15px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .add-type-section h3 {
-  margin-bottom: 20px;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
   color: #333;
-  text-align: center;
 }
 
 .add-form {
@@ -308,32 +326,29 @@ export default {
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 1.5rem;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #555;
+  font-weight: 600;
+  color: #333;
 }
 
 .form-group small {
-  display: block;
-  margin-top: 4px;
   color: #888;
   font-size: 0.85rem;
 }
 
 .form-group input,
 .form-group select {
-  width: 100%;
-  padding: 12px;
+  padding: 0.75rem;
   border: 2px solid #e1e5e9;
   border-radius: 8px;
   font-size: 1rem;
@@ -352,15 +367,13 @@ export default {
 }
 
 .btn {
-  padding: 12px 24px;
+  padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 8px;
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
 }
 
 .btn-primary {
@@ -370,7 +383,7 @@ export default {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
 .btn-secondary {
@@ -379,7 +392,7 @@ export default {
 }
 
 .btn-secondary:hover {
-  background: #545b62;
+  background: #5a6268;
 }
 
 .btn-danger {
@@ -392,57 +405,53 @@ export default {
 }
 
 .btn-small {
-  padding: 6px 12px;
+  padding: 0.4rem 0.75rem;
   font-size: 0.875rem;
 }
 
 .types-list {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 30px;
+  background: white;
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .types-list h3 {
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-  text-align: center;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+  font-size: 1.3rem;
 }
 
 .no-types {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 40px;
   text-align: center;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
+  color: #666;
+  padding: 2rem;
 }
 
 .types-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  gap: 1.25rem;
 }
 
 .type-card {
-  background: white;
-  border-radius: 12px;
+  padding: 1.25rem;
+  border-radius: 10px;
   border-left: 4px solid #667eea;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
+  background: #f8f9fa;
+  transition: transform 0.3s;
 }
 
 .type-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateX(5px);
 }
 
 .type-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
 }
 
 .type-icon {
@@ -452,7 +461,7 @@ export default {
 .type-info h4 {
   margin: 0;
   color: #333;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   flex: 1;
 }
 
@@ -468,13 +477,13 @@ export default {
 .type-name {
   color: #888;
   font-size: 0.875rem;
-  margin: 5px 0;
+  margin: 0.25rem 0;
   font-family: monospace;
 }
 
 .description {
-  color: #666;
-  margin: 10px 0;
+  color: #888;
+  margin: 0.5rem 0;
   font-style: italic;
 }
 
@@ -482,31 +491,31 @@ export default {
   width: 60px;
   height: 30px;
   border-radius: 4px;
-  margin: 10px 0;
+  margin: 0.5rem 0;
   border: 1px solid #ddd;
 }
 
 .meta {
   color: #999;
   font-size: 0.875rem;
-  margin: 10px 0;
+  margin: 0.5rem 0;
 }
 
 .card-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .edit-form .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 1rem;
 }
 
 .edit-form input {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
   font-size: 0.9rem;
 }
 
@@ -514,13 +523,17 @@ export default {
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .types-grid {
     grid-template-columns: 1fr;
   }
-  
-  .card-actions {
-    flex-direction: column;
+
+  .category-type-manager {
+    padding: 1rem;
+  }
+
+  .page-header h2 {
+    font-size: 2rem;
   }
 }
 </style>

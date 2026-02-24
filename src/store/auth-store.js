@@ -114,8 +114,15 @@ export const authStore = reactive({
   }
 })
 
-// Listen for auth:logout event from API interceptor
-window.addEventListener('auth:logout', () => {
+window.addEventListener('auth:logout', async () => {
+  setAccessToken(null)
   authStore.user = null
   authStore.isAuthenticated = false
+  const { store } = await import('./api-store')
+  store.accounts = []
+  store.monthlyEntries = []
+  store.categories = []
+  store.categoryTypes = []
+  store.error = null
+  window.location.href = '/login'
 })

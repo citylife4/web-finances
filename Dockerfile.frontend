@@ -21,7 +21,7 @@ COPY . .
 # Limit Node.js memory to 896MB for low-resource VPS (leave 128MB for system)
 # Skip TypeScript checking in Docker builds to reduce memory usage
 # Limit UV_THREADPOOL_SIZE to reduce concurrent operations
-RUN NODE_OPTIONS=\"--max-old-space-size=896\" \
+RUN NODE_OPTIONS="--max-old-space-size=896" \
     UV_THREADPOOL_SIZE=1 \
     VITE_API_URL=${VITE_API_URL} \
     npm run build:docker
