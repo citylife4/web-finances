@@ -216,7 +216,7 @@ import { ref, computed, onMounted } from 'vue'
 import { store } from '../store/api-store'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import { useToast } from '../components/ToastContainer.vue'
-import { formatCurrency, formatDate } from '../utils/formatters'
+import { formatCurrency, formatDate, extractId } from '../utils/formatters'
 
 export default {
   name: 'AccountManager',
@@ -325,7 +325,7 @@ export default {
 
     const getLatestValue = (accountId) => {
       const entries = store.monthlyEntries
-        .filter(entry => entry.accountId._id === accountId)
+        .filter(entry => extractId(entry.accountId) === accountId)
         .sort((a, b) => new Date(b.month) - new Date(a.month))
       
       return entries.length > 0 ? entries[0].amount : 0

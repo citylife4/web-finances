@@ -19,3 +19,13 @@ export function formatCurrency(amount) {
 export function formatDate(dateString) {
   return new Date(dateString).toLocaleDateString()
 }
+
+/**
+ * Extract the string ID from an accountId field that may be
+ * either a plain string or a populated Mongoose object.
+ * @param {string|{_id: string}} accountId
+ * @returns {string|undefined}
+ */
+export function extractId(accountId) {
+  return typeof accountId === 'string' ? accountId : accountId?._id
+}

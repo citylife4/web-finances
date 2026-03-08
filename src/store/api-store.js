@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { accountsAPI, entriesAPI, categoriesAPI, categoryTypesAPI } from '../services/api'
+import { extractId } from '../utils/formatters'
 
 export const store = reactive({
   accounts: [],
@@ -86,10 +87,7 @@ export const store = reactive({
       this.clearError()
       await accountsAPI.delete(id)
       this.accounts = this.accounts.filter(acc => acc._id !== id)
-      this.monthlyEntries = this.monthlyEntries.filter(entry => {
-        const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId?._id
-        return entryAccountId !== id
-      })
+      this.monthlyEntries = this.monthlyEntries.filter(entry => extractId(entry.accountId) !== id)
     } catch (error) {
       this.setError('Failed to delete account: ' + error.message)
       throw error
