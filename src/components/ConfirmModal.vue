@@ -1,15 +1,16 @@
 <template>
   <Teleport to="body">
     <Transition name="modal">
-      <div v-if="visible" class="confirm-overlay" @click.self="cancel">
+      <div v-if="visible" class="confirm-overlay" data-cy="confirm-modal" @click.self="cancel">
         <div class="confirm-dialog" role="alertdialog" :aria-label="title">
           <h3 class="confirm-title">{{ title }}</h3>
           <p class="confirm-message">{{ message }}</p>
           <div class="confirm-actions">
-            <button class="btn btn-secondary" @click="cancel">{{ cancelText }}</button>
+            <button class="btn btn-secondary" data-cy="confirm-cancel" @click="cancel">{{ cancelText }}</button>
             <button
               class="btn"
               :class="dangerous ? 'btn-danger' : 'btn-primary'"
+              data-cy="confirm-accept"
               @click="confirm"
               ref="confirmBtn"
             >

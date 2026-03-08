@@ -179,7 +179,7 @@ export default {
     })
 
     const hasAnyValue = computed(() => {
-      return Object.values(accountValues.value).some(value => value && value > 0)
+      return Object.values(accountValues.value).some(value => value !== '' && value !== null && value !== undefined)
     })
 
     const initializeAccountValues = () => {

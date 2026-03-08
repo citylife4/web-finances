@@ -1,5 +1,10 @@
 import { reactive } from 'vue'
 import { authAPI, setAccessToken, getAccessToken } from '../services/api'
+import { store } from './api-store'
+
+const resetApplicationState = () => {
+  store.reset()
+}
 
 export const authStore = reactive({
   user: null,
@@ -83,13 +88,8 @@ export const authStore = reactive({
       setAccessToken(null)
       this.user = null
       this.isAuthenticated = false
-      
-      // Clear application store data
-      const { store } = await import('./api-store')
-      store.accounts = []
-      store.monthlyEntries = []
-      store.categories = []
-      store.error = null
+
+      resetApplicationState()
     }
   },
 
@@ -103,13 +103,8 @@ export const authStore = reactive({
       setAccessToken(null)
       this.user = null
       this.isAuthenticated = false
-      
-      // Clear application store data
-      const { store } = await import('./api-store')
-      store.accounts = []
-      store.monthlyEntries = []
-      store.categories = []
-      store.error = null
+
+      resetApplicationState()
     }
   }
 })
@@ -118,11 +113,6 @@ window.addEventListener('auth:logout', async () => {
   setAccessToken(null)
   authStore.user = null
   authStore.isAuthenticated = false
-  const { store } = await import('./api-store')
-  store.accounts = []
-  store.monthlyEntries = []
-  store.categories = []
-  store.categoryTypes = []
-  store.error = null
+  resetApplicationState()
   window.location.href = '/login'
 })

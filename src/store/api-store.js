@@ -21,6 +21,16 @@ export const store = reactive({
   clearError() {
     this.error = null
   },
+
+  reset() {
+    this.accounts = []
+    this.monthlyEntries = []
+    this.categories = []
+    this.categoryTypes = []
+    this.loading = false
+    this.error = null
+    this.initialized = false
+  },
   
   // Account management
   async loadAccounts() {

@@ -5,6 +5,15 @@
       <p class="subtitle">Manage categories for better organization of your accounts</p>
     </div>
 
+    <div v-if="initializing" class="loading-state">
+      <div class="loading-card">
+        <div class="spinner"></div>
+        <p>Loading categories...</p>
+      </div>
+    </div>
+
+    <template v-else>
+
     <!-- Add Category Section -->
     <div class="add-category-section">
       <h3>Add New Category</h3>
@@ -126,6 +135,7 @@
       @confirm="deleteCategory"
       @cancel="confirmDelete.visible = false"
     />
+    </template>
   </div>
 </template>
 
@@ -141,6 +151,7 @@ export default {
   components: { ConfirmModal },
   setup() {
     const toast = useToast()
+    const initializing = ref(true)
     const confirmDelete = ref({ visible: false, categoryId: null })
     const newCategory = ref({
       name: '',
@@ -159,6 +170,8 @@ export default {
         ])
       } catch (error) {
         // ignored — store handles errors
+      } finally {
+        initializing.value = false
       }
     })
 
@@ -225,6 +238,7 @@ export default {
 
     return {
       store,
+      initializing,
       newCategory,
       editingCategory,
       confirmDelete,
@@ -265,6 +279,35 @@ export default {
 .subtitle {
   color: #666;
   margin-top: 0.5rem;
+}
+
+.loading-state {
+  background: white;
+  border-radius: 15px;
+  padding: 3rem 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .add-category-section {

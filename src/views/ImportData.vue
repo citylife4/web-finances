@@ -318,6 +318,19 @@ export default {
       this.clearSuccess()
       this.parseFile(file)
     },
+
+    readFileAsArrayBuffer(file) {
+      if (typeof file.arrayBuffer === 'function') {
+        return file.arrayBuffer()
+      }
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => reject(reader.error || new Error('Failed to read file.'))
+        reader.readAsArrayBuffer(file)
+      })
+    },
     
     async parseFile(file) {
       this.isProcessing = true
@@ -326,7 +339,7 @@ export default {
       this.selectedSheet = null
       
       try {
-        const arrayBuffer = await file.arrayBuffer()
+        const arrayBuffer = await this.readFileAsArrayBuffer(file)
         const workbook = XLSX.read(arrayBuffer, {
           type: 'array',
           cellDates: true,  // Parse Excel date serial numbers as Date objects

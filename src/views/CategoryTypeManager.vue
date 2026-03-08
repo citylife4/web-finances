@@ -5,6 +5,15 @@
       <p class="subtitle">Manage types to organize your categories and accounts</p>
     </div>
 
+    <div v-if="initializing" class="loading-state">
+      <div class="loading-card">
+        <div class="spinner"></div>
+        <p>Loading category types...</p>
+      </div>
+    </div>
+
+    <template v-else>
+
     <!-- Add Category Type Section -->
     <div class="add-type-section">
       <h3>Add New Category Type</h3>
@@ -163,6 +172,7 @@
       @confirm="deleteCategoryType"
       @cancel="confirmDelete.visible = false"
     />
+    </template>
   </div>
 </template>
 
@@ -178,6 +188,7 @@ export default {
   components: { ConfirmModal },
   setup() {
     const toast = useToast()
+    const initializing = ref(true)
     const confirmDelete = ref({ visible: false, typeId: null })
     const newType = ref({
       name: '',
@@ -195,6 +206,8 @@ export default {
         await store.loadCategoryTypes()
       } catch (error) {
         // ignored — store handles errors
+      } finally {
+        initializing.value = false
       }
     })
 
@@ -265,6 +278,7 @@ export default {
       store,
       newType,
       editingType,
+      initializing,
       confirmDelete,
       addCategoryType,
       editCategoryType,
@@ -302,6 +316,36 @@ export default {
 .subtitle {
   color: #666;
   margin-top: 0.5rem;
+}
+
+.loading-state {
+  background: white;
+  border-radius: 15px;
+  padding: 3rem 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .add-type-section {

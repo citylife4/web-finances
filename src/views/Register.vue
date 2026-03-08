@@ -75,6 +75,7 @@
 
 <script>
 import { authStore } from '../store/auth-store'
+import { store } from '../store/api-store'
 
 export default {
   name: 'Register',
@@ -126,12 +127,9 @@ export default {
           email: this.email,
           password: this.password
         })
-        
-        // Initialize store with user data after successful registration
-        const { store } = await import('../store/api-store')
+
         await store.initialize()
-        
-        // Redirect to dashboard after successful registration
+
         this.$router.push('/')
       } catch (error) {
         this.error = error.response?.data?.error || 'Registration failed. Please try again.'

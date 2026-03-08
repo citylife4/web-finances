@@ -9,26 +9,14 @@
 </template>
 
 <script>
-import { onMounted, onUnmounted } from 'vue'
 import NavBar from './components/NavBar.vue'
 import ToastContainer from './components/ToastContainer.vue'
-import { store } from './store/api-store'
 
 export default {
   name: 'App',
   components: {
     NavBar,
     ToastContainer
-  },
-  setup() {
-    onMounted(async () => {
-      const { authStore } = await import('./store/auth-store')
-      if (authStore.isAuthenticated) {
-        store.initialize()
-      }
-    })
-
-    return { store }
   }
 }
 </script>
