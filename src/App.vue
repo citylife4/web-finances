@@ -4,44 +4,19 @@
     <main class="main-content">
       <router-view />
     </main>
+    <ToastContainer />
   </div>
 </template>
 
 <script>
-import { onMounted, onUnmounted } from 'vue'
 import NavBar from './components/NavBar.vue'
-import { store } from './store/api-store'
-import { setAccessToken } from './services/api'
+import ToastContainer from './components/ToastContainer.vue'
 
 export default {
   name: 'App',
   components: {
-    NavBar
-  },
-  setup() {
-    // Handle logout events from token refresh failures
-    const handleLogout = () => {
-      // Clear local state and redirect to login
-      console.log('Session expired, logging out...')
-      // You can add router navigation here when auth views are implemented
-    }
-
-    onMounted(async () => {
-      // Only initialize store if user is authenticated
-      const { authStore } = await import('./store/auth-store')
-      if (authStore.isAuthenticated) {
-        store.initialize()
-      }
-      
-      // Listen for auth logout events
-      window.addEventListener('auth:logout', handleLogout)
-    })
-
-    onUnmounted(() => {
-      window.removeEventListener('auth:logout', handleLogout)
-    })
-
-    return { store }
+    NavBar,
+    ToastContainer
   }
 }
 </script>

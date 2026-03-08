@@ -6,8 +6,11 @@ jest.mock('../src/models', () => ({
   Category: {
     find: jest.fn(),
     findById: jest.fn(),
-    findByIdAndUpdate: jest.fn(),
-    findByIdAndDelete: jest.fn()
+    findOneAndUpdate: jest.fn(),
+    findOneAndDelete: jest.fn()
+  },
+  CategoryType: {
+    findById: jest.fn()
   },
   Account: {
     countDocuments: jest.fn()
@@ -23,7 +26,7 @@ jest.mock('../src/middleware/auth', () => ({
   }
 }));
 
-const { Category, Account } = require('../src/models');
+const { Category, CategoryType, Account } = require('../src/models');
 
 // Create a test app
 const createTestApp = () => {
@@ -44,12 +47,14 @@ describe('Categories Routes', () => {
   describe('GET /api/categories', () => {
     it('should return all categories', async () => {
       const mockCategories = [
-        { _id: '1', name: 'Bank Accounts', type: 'deposits' },
-        { _id: '2', name: 'Stocks', type: 'investments' }
+        { _id: '1', name: 'Bank Accounts', typeId: '507f1f77bcf86cd799439011' },
+        { _id: '2', name: 'Stocks', typeId: '507f1f77bcf86cd799439012' }
       ];
 
       Category.find.mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockCategories)
+        populate: jest.fn().mockReturnValue({
+          sort: jest.fn().mockResolvedValue(mockCategories)
+        })
       });
 
       const response = await request(app).get('/api/categories');
@@ -59,27 +64,30 @@ describe('Categories Routes', () => {
     });
   });
 
-  describe('GET /api/categories/:type', () => {
-    it('should return categories by type', async () => {
+  describe('GET /api/categories/type/:typeId', () => {
+    it('should return categories by typeId', async () => {
       const mockCategories = [
-        { _id: '1', name: 'Bank Accounts', type: 'deposits' }
+        { _id: '1', name: 'Bank Accounts', typeId: '507f1f77bcf86cd799439011' }
       ];
 
+      CategoryType.findById.mockResolvedValue({ _id: '507f1f77bcf86cd799439011' });
       Category.find.mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockCategories)
+        populate: jest.fn().mockReturnValue({
+          sort: jest.fn().mockResolvedValue(mockCategories)
+        })
       });
 
-      const response = await request(app).get('/api/categories/deposits');
+      const response = await request(app).get('/api/categories/type/507f1f77bcf86cd799439011');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockCategories);
     });
 
-    it('should return 400 for invalid type', async () => {
-      const response = await request(app).get('/api/categories/invalid');
+    it('should return 400 for invalid typeId', async () => {
+      const response = await request(app).get('/api/categories/type/invalid');
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid category type');
+      expect(response.body.error).toBe('Invalid typeId');
     });
   });
 
@@ -95,7 +103,7 @@ describe('Categories Routes', () => {
 
     it('should delete category if no accounts use it', async () => {
       Account.countDocuments.mockResolvedValue(0);
-      Category.findByIdAndDelete.mockResolvedValue({ _id: '1', name: 'Test' });
+      Category.findOneAndDelete.mockResolvedValue({ _id: '1', name: 'Test' });
 
       const response = await request(app).delete('/api/categories/507f1f77bcf86cd799439011');
 
@@ -105,7 +113,7 @@ describe('Categories Routes', () => {
 
     it('should return 404 if category not found', async () => {
       Account.countDocuments.mockResolvedValue(0);
-      Category.findByIdAndDelete.mockResolvedValue(null);
+      Category.findOneAndDelete.mockResolvedValue(null);
 
       const response = await request(app).delete('/api/categories/507f1f77bcf86cd799439011');
 

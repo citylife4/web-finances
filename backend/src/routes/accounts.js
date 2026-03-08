@@ -1,23 +1,29 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { Account, CategoryType, Category, MonthlyEntry } = require('../models');
 const { authenticate } = require('../middleware/auth');
 
-// Apply authentication to all routes
 router.use(authenticate);
 
-// GET /api/accounts - Get all accounts with populated category and type
 router.get('/', async (req, res) => {
   try {
-    const accounts = await Account.find()
+    const accounts = await Account.find({ userId: req.userId })
       .populate('categoryId', 'name typeId')
       .populate('typeId', 'name displayName color')
       .sort({ createdAt: -1 });
     
-    // Also populate the category's type for backward compatibility
-    for (let account of accounts) {
-      if (account.categoryId && account.categoryId.typeId) {
-        await account.categoryId.populate('typeId', 'name displayName color');
+    const typeIds = [...new Set(accounts
+      .filter(a => a.categoryId?.typeId)
+      .map(a => a.categoryId.typeId.toString())
+    )];
+    const types = await CategoryType.find({ _id: { $in: typeIds } }).select('name displayName color');
+    const typeMap = new Map(types.map(t => [t._id.toString(), t]));
+    
+    for (const account of accounts) {
+      if (account.categoryId?.typeId) {
+        const typeData = typeMap.get(account.categoryId.typeId.toString());
+        if (typeData) account.categoryId.typeId = typeData;
       }
     }
     
@@ -27,7 +33,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/accounts - Create a new account
 router.post('/', async (req, res) => {
   try {
     const { name, typeId, categoryId, description } = req.body;
@@ -35,15 +40,17 @@ router.post('/', async (req, res) => {
     if (!name || !typeId || !categoryId) {
       return res.status(400).json({ error: 'Name, typeId, and categoryId are required' });
     }
+
+    if (!mongoose.Types.ObjectId.isValid(typeId) || !mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({ error: 'Invalid typeId or categoryId' });
+    }
     
-    // Verify the type exists
     const categoryType = await CategoryType.findById(typeId);
     if (!categoryType) {
       return res.status(400).json({ error: 'Invalid category type' });
     }
     
-    // Verify the category exists and matches the type
-    const category = await Category.findById(categoryId);
+    const category = await Category.findOne({ _id: categoryId, userId: req.userId });
     if (!category) {
       return res.status(400).json({ error: 'Invalid category' });
     }
@@ -52,9 +59,9 @@ router.post('/', async (req, res) => {
     }
     
     const account = new Account({
+      userId: req.userId,
       name: name.trim(),
       typeId,
-      type: categoryType.name, // Keep for backward compatibility
       categoryId,
       description: description?.trim()
     });
@@ -64,58 +71,61 @@ router.post('/', async (req, res) => {
       .populate('categoryId', 'name typeId')
       .populate('typeId', 'name displayName color');
     
-    // Populate category's type too
     if (populatedAccount.categoryId) {
       await populatedAccount.categoryId.populate('typeId', 'name displayName color');
     }
     
     res.status(201).json(populatedAccount);
   } catch (error) {
-    console.error('Error creating account:', error);
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: error.message });
     }
-    res.status(500).json({ error: 'Failed to create account', details: error.message });
+    res.status(500).json({ error: 'Failed to create account' });
   }
 });
 
-// PUT /api/accounts/:id - Update an account
 router.put('/:id', async (req, res) => {
   try {
     const { name, typeId, categoryId, description } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid account ID' });
+    }
     
     const updateData = {};
     if (name) updateData.name = name.trim();
     if (description !== undefined) updateData.description = description?.trim();
     
-    // If typeId is being changed, verify it exists
     if (typeId) {
+      if (!mongoose.Types.ObjectId.isValid(typeId)) {
+        return res.status(400).json({ error: 'Invalid typeId' });
+      }
       const categoryType = await CategoryType.findById(typeId);
       if (!categoryType) {
         return res.status(400).json({ error: 'Invalid category type' });
       }
       updateData.typeId = typeId;
-      updateData.type = categoryType.name; // Keep for backward compatibility
     }
     
-    // If categoryId is being changed, verify it exists and matches the type
     if (categoryId) {
-      const category = await Category.findById(categoryId);
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        return res.status(400).json({ error: 'Invalid categoryId' });
+      }
+      const category = await Category.findOne({ _id: categoryId, userId: req.userId });
       if (!category) {
         return res.status(400).json({ error: 'Invalid category' });
       }
       
-      // If both typeId and categoryId are provided, ensure they match
-      const targetTypeId = typeId || (await Account.findById(req.params.id)).typeId;
-      if (category.typeId.toString() !== targetTypeId.toString()) {
+      const targetTypeId = typeId || (await Account.findOne({ _id: req.params.id, userId: req.userId }))?.typeId;
+      if (category.typeId.toString() !== targetTypeId?.toString()) {
         return res.status(400).json({ error: 'Category does not belong to the specified type' });
       }
       
       updateData.categoryId = categoryId;
     }
     
-    const account = await Account.findByIdAndUpdate(
-      req.params.id,
+    const account = await Account.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       updateData,
       { new: true, runValidators: true }
     )
@@ -126,7 +136,6 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Account not found' });
     }
     
-    // Populate category's type too
     if (account.categoryId) {
       await account.categoryId.populate('typeId', 'name displayName color');
     }
@@ -140,17 +149,19 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/accounts/:id - Delete an account
 router.delete('/:id', async (req, res) => {
   try {
-    const account = await Account.findByIdAndDelete(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid account ID' });
+    }
+
+    const account = await Account.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
     
-    // Also delete all related monthly entries
-    await MonthlyEntry.deleteMany({ accountId: req.params.id });
+    await MonthlyEntry.deleteMany({ accountId: req.params.id, userId: req.userId });
     
     res.json({ message: 'Account and related entries deleted successfully' });
   } catch (error) {

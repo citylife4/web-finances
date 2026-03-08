@@ -5,19 +5,16 @@
       <p class="subtitle">Track your wealth progression over time</p>
     </div>
 
-    <!-- Loading State -->
     <div v-if="store.loading" class="loading-state">
       <p>Loading your financial data...</p>
     </div>
 
-    <!-- Error State -->
-    <div v-if="store.error" class="error-state">
+    <div v-else-if="store.error" class="error-state">
       <p>⚠️ {{ store.error }}</p>
       <button @click="store.initialize()" class="btn btn-primary">Retry</button>
     </div>
 
-    <!-- Dashboard Content -->
-    <div v-if="!store.loading && !store.error">
+    <div v-else>
       <!-- Summary Cards -->
       <div class="summary-cards">
         <!-- Dynamic type cards -->
@@ -116,6 +113,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { store } from '../store/api-store'
 import { format } from 'date-fns'
+import { formatCurrency } from '../utils/formatters'
 
 Chart.register(...registerables)
 
@@ -162,7 +160,6 @@ export default {
             return total + (latestEntry ? latestEntry.amount : 0)
           }, 0)
       } catch (error) {
-        console.error('Error calculating total for type:', error)
         return 0
       }
     }
@@ -253,10 +250,6 @@ export default {
       
       return insights.sort((a, b) => b.total - a.total)
     })
-
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
-    }
 
     const formatMonth = (monthString) => {
       return format(new Date(monthString + '-01'), 'MMMM yyyy')
@@ -353,7 +346,7 @@ export default {
         }
       })
       } catch (error) {
-        console.error('Error creating progression chart:', error)
+        // Chart rendering failed — non-critical
       }
     }
 
@@ -464,7 +457,7 @@ export default {
           store.loadEntries()
         ])
       } catch (error) {
-        console.error('Failed to load data:', error)
+        // ignored — store handles errors
       }
 
       await createProgressionChart()

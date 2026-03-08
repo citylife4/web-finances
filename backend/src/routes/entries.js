@@ -1,17 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { MonthlyEntry, Account } = require('../models');
+const { MonthlyEntry, Account, CategoryType } = require('../models');
 const mongoose = require('mongoose');
 const { authenticate } = require('../middleware/auth');
 
-// Apply authentication to all routes
 router.use(authenticate);
 
-// GET /api/entries - Get all monthly entries
 router.get('/', async (req, res) => {
   try {
-    const entries = await MonthlyEntry.find()
-      .populate('accountId', 'name type category')
+    const entries = await MonthlyEntry.find({ userId: req.userId })
+      .populate('accountId', 'name typeId categoryId')
       .sort({ month: -1, createdAt: -1 });
     res.json(entries);
   } catch (error) {
@@ -19,7 +17,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/entries/month/:month - Get entries for a specific month
 router.get('/month/:month', async (req, res) => {
   try {
     const { month } = req.params;
@@ -28,8 +25,8 @@ router.get('/month/:month', async (req, res) => {
       return res.status(400).json({ error: 'Invalid month format. Use YYYY-MM' });
     }
     
-    const entries = await MonthlyEntry.find({ month })
-      .populate('accountId', 'name type category')
+    const entries = await MonthlyEntry.find({ month, userId: req.userId })
+      .populate('accountId', 'name typeId categoryId')
       .sort({ createdAt: -1 });
     res.json(entries);
   } catch (error) {
@@ -37,7 +34,6 @@ router.get('/month/:month', async (req, res) => {
   }
 });
 
-// POST /api/entries - Create or update monthly entries (batch)
 router.post('/', async (req, res) => {
   try {
     const { entries } = req.body;
@@ -50,7 +46,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Entries array cannot be empty' });
     }
 
-    // Validate all entries first
     const accountIds = new Set();
     for (let i = 0; i < entries.length; i++) {
       const { accountId, month, amount } = entries[i] || {};
@@ -67,55 +62,53 @@ router.post('/', async (req, res) => {
       if (isNaN(numAmount)) {
         return res.status(400).json({ error: `Invalid amount at index ${i}. Must be a valid number.` });
       }
-      // Allow negative amounts for credit cards, loans, debts, etc.
 
       accountIds.add(accountId);
     }
 
-    // Batch fetch all accounts at once (fixes N+1 query problem)
     const accounts = await Account.find({ 
-      _id: { $in: Array.from(accountIds) } 
+      _id: { $in: Array.from(accountIds) },
+      userId: req.userId
     }).select('_id name');
     
     const accountMap = new Map(accounts.map(acc => [acc._id.toString(), acc]));
 
-    // Verify all accounts exist
     for (const accountId of accountIds) {
       if (!accountMap.has(accountId)) {
         return res.status(400).json({ error: `Account ${accountId} not found` });
       }
     }
 
-    // Prepare bulk operations
     const bulkOps = entries.map(({ accountId, month, amount }) => ({
       updateOne: {
-        filter: { accountId, month },
-        update: { $set: { amount: Number(amount) } },
+        filter: { accountId, month, userId: req.userId },
+        update: { $set: { amount: Number(amount) }, $setOnInsert: { userId: req.userId } },
         upsert: true
       }
     }));
 
-    // Execute bulk operation
     await MonthlyEntry.bulkWrite(bulkOps);
 
-    // Fetch and return the updated entries
     const monthsToFetch = [...new Set(entries.map(e => e.month))];
     const results = await MonthlyEntry.find({
       accountId: { $in: Array.from(accountIds) },
-      month: { $in: monthsToFetch }
-    }).populate('accountId', 'name type');
+      month: { $in: monthsToFetch },
+      userId: req.userId
+    }).populate('accountId', 'name typeId');
 
     res.status(201).json(results);
   } catch (error) {
-    console.error('Error saving entries:', error);
     res.status(500).json({ error: 'Failed to save entries' });
   }
 });
 
-// PUT /api/entries/:id - Update a monthly entry
 router.put('/:id', async (req, res) => {
   try {
     const { amount } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid entry ID' });
+    }
     
     if (amount === undefined || amount === null) {
       return res.status(400).json({ error: 'Amount is required' });
@@ -125,13 +118,12 @@ router.put('/:id', async (req, res) => {
     if (isNaN(numAmount)) {
       return res.status(400).json({ error: 'Amount must be a valid number' });
     }
-    // Allow negative amounts for credit cards, loans, debts, etc.
     
-    const entry = await MonthlyEntry.findByIdAndUpdate(
-      req.params.id,
+    const entry = await MonthlyEntry.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { amount: numAmount },
       { new: true, runValidators: true }
-    ).populate('accountId', 'name type category');
+    ).populate('accountId', 'name typeId categoryId');
     
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
@@ -143,10 +135,13 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/entries/:id - Delete a monthly entry
 router.delete('/:id', async (req, res) => {
   try {
-    const entry = await MonthlyEntry.findByIdAndDelete(req.params.id);
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid entry ID' });
+    }
+
+    const entry = await MonthlyEntry.findOneAndDelete({ _id: req.params.id, userId: req.userId });
     
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
@@ -158,15 +153,19 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// GET /api/entries/analytics/totals - Get monthly totals for analytics
 router.get('/analytics/totals', async (req, res) => {
   try {
-    const { CategoryType } = require('../models');
-    
-    // Get all category types for dynamic grouping
+    const userAccounts = await Account.find({ userId: req.userId }).select('_id');
+    const userAccountIds = userAccounts.map(a => a._id);
+
     const categoryTypes = await CategoryType.find();
     
     const pipeline = [
+      {
+        $match: {
+          accountId: { $in: userAccountIds }
+        }
+      },
       {
         $lookup: {
           from: 'accounts',

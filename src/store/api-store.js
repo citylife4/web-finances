@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { accountsAPI, entriesAPI, categoriesAPI, categoryTypesAPI } from '../services/api'
+import { extractId } from '../utils/formatters'
 
-// Application store
 export const store = reactive({
   accounts: [],
   monthlyEntries: [],
@@ -9,21 +9,28 @@ export const store = reactive({
   categoryTypes: [],
   loading: false,
   error: null,
+  initialized: false,
   
-  // Set loading state
   setLoading(loading) {
     this.loading = loading
   },
   
-  // Set error state
   setError(error) {
     this.error = error
-    console.error('Store error:', error)
   },
   
-  // Clear error
   clearError() {
     this.error = null
+  },
+
+  reset() {
+    this.accounts = []
+    this.monthlyEntries = []
+    this.categories = []
+    this.categoryTypes = []
+    this.loading = false
+    this.error = null
+    this.initialized = false
   },
   
   // Account management
@@ -45,9 +52,7 @@ export const store = reactive({
     try {
       this.setLoading(true)
       this.clearError()
-      console.log('Adding account via API:', account)
       const response = await accountsAPI.create(account)
-      console.log('Account created:', response.data)
       this.accounts.push(response.data)
       return response.data
     } catch (error) {
@@ -82,8 +87,7 @@ export const store = reactive({
       this.clearError()
       await accountsAPI.delete(id)
       this.accounts = this.accounts.filter(acc => acc._id !== id)
-      // Also remove related entries from local state
-      this.monthlyEntries = this.monthlyEntries.filter(entry => entry.accountId._id !== id)
+      this.monthlyEntries = this.monthlyEntries.filter(entry => extractId(entry.accountId) !== id)
     } catch (error) {
       this.setError('Failed to delete account: ' + error.message)
       throw error
@@ -92,7 +96,6 @@ export const store = reactive({
     }
   },
   
-  // Monthly entries management
   async loadEntries() {
     try {
       this.setLoading(true)
@@ -151,36 +154,6 @@ export const store = reactive({
     }
   },
   
-  // Data analysis
-  getTotalByType(type, month = null) {
-    const relevantAccounts = this.accounts.filter(acc => acc.type === type)
-    
-    if (!month) {
-      // Get latest values
-      return relevantAccounts.reduce((total, account) => {
-        const latestEntry = this.monthlyEntries
-          .filter(entry => {
-            const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-            return entryAccountId === account._id
-          })
-          .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
-        
-        return total + (latestEntry ? latestEntry.amount : 0)
-      }, 0)
-    }
-    
-    // Get values for specific month
-    return relevantAccounts.reduce((total, account) => {
-      const entry = this.monthlyEntries.find(
-        entry => {
-          const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-          return entryAccountId === account._id && entry.month === month
-        }
-      )
-      return total + (entry ? entry.amount : 0)
-    }, 0)
-  },
-  
   async getMonthlyTotals() {
     try {
       const response = await entriesAPI.getTotals()
@@ -191,8 +164,8 @@ export const store = reactive({
     }
   },
   
-  // Initialize store
   async initialize() {
+    if (this.initialized) return
     try {
       await Promise.all([
         this.loadCategoryTypes(),
@@ -200,6 +173,7 @@ export const store = reactive({
         this.loadEntries(),
         this.loadCategories()
       ])
+      this.initialized = true
     } catch (error) {
       this.setError('Failed to initialize application: ' + error.message)
     }
@@ -278,7 +252,6 @@ export const store = reactive({
     })
   },
 
-  // Category Type management
   async loadCategoryTypes() {
     try {
       this.setLoading(true)
