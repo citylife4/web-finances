@@ -25,14 +25,14 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/80</span>
+                <span class='fraction'>0/83</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/35</span>
+                <span class='fraction'>0/31</span>
             </div>
         
             
@@ -46,7 +46,7 @@
             <div class='fl pad1y space-right2'>
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/76</span>
+                <span class='fraction'>0/79</span>
             </div>
         
             
@@ -290,7 +290,15 @@
 <a name='L225'></a><a href='#L225'>225</a>
 <a name='L226'></a><a href='#L226'>226</a>
 <a name='L227'></a><a href='#L227'>227</a>
-<a name='L228'></a><a href='#L228'>228</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a></td><td class="line-coverage quiet"><span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -360,6 +368,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -415,6 +424,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -449,8 +459,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -512,6 +527,7 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -583,9 +599,10 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
       }
 &nbsp;
       const numAmount = <span class="cstat-no" title="statement not covered" >Number(amount);</span>
-<span class="cstat-no" title="statement not covered" >      if (isNaN(numAmount) || numAmount &lt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >        return res.status(400).json({ error: `Invalid or negative amount at index ${i}` });</span>
+<span class="cstat-no" title="statement not covered" >      if (isNaN(numAmount)) {</span>
+<span class="cstat-no" title="statement not covered" >        return res.status(400).json({ error: `Invalid amount at index ${i}. Must be a valid number.` });</span>
       }
+      // Allow negative amounts for credit cards, loans, debts, etc.
 &nbsp;
 <span class="cstat-no" title="statement not covered" >      accountIds.add(accountId);</span>
     }
@@ -640,9 +657,10 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
     }
     
     const numAmount = <span class="cstat-no" title="statement not covered" >Number(amount);</span>
-<span class="cstat-no" title="statement not covered" >    if (isNaN(numAmount) || numAmount &lt; 0) {</span>
-<span class="cstat-no" title="statement not covered" >      return res.status(400).json({ error: 'Amount must be a non-negative number' });</span>
+<span class="cstat-no" title="statement not covered" >    if (isNaN(numAmount)) {</span>
+<span class="cstat-no" title="statement not covered" >      return res.status(400).json({ error: 'Amount must be a valid number' });</span>
     }
+    // Allow negative amounts for credit cards, loans, debts, etc.
     
     const entry = <span class="cstat-no" title="statement not covered" >await MonthlyEntry.findByIdAndUpdate(</span>
       req.params.id,
@@ -678,6 +696,11 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
 // GET /api/entries/analytics/totals - Get monthly totals for analytics
 <span class="cstat-no" title="statement not covered" >router.get('/analytics/totals', <span class="fstat-no" title="function not covered" >as</span>ync (req, res) =&gt; {</span>
 <span class="cstat-no" title="statement not covered" >  try {</span>
+    const { CategoryType } = <span class="cstat-no" title="statement not covered" >require('../models');</span>
+    
+    // Get all category types for dynamic grouping
+    const categoryTypes = <span class="cstat-no" title="statement not covered" >await CategoryType.find();</span>
+    
     const pipeline = <span class="cstat-no" title="statement not covered" >[</span>
       {
         $lookup: {
@@ -691,10 +714,22 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
         $unwind: '$account'
       },
       {
+        $lookup: {
+          from: 'categorytypes',
+          localField: 'account.typeId',
+          foreignField: '_id',
+          as: 'categoryType'
+        }
+      },
+      {
+        $unwind: '$categoryType'
+      },
+      {
         $group: {
           _id: {
             month: '$month',
-            type: '$account.type'
+            typeId: '$categoryType._id',
+            typeName: '$categoryType.name'
           },
           total: { $sum: '$amount' }
         }
@@ -702,22 +737,11 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
       {
         $group: {
           _id: '$_id.month',
-          deposits: {
-            $sum: {
-              $cond: [
-                { $eq: ['$_id.type', 'deposits'] },
-                '$total',
-                0
-              ]
-            }
-          },
-          investments: {
-            $sum: {
-              $cond: [
-                { $eq: ['$_id.type', 'investments'] },
-                '$total',
-                0
-              ]
+          typeBreakdown: {
+            $push: {
+              typeId: '$_id.typeId',
+              typeName: '$_id.typeName',
+              total: '$total'
             }
           }
         }
@@ -725,9 +749,8 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
       {
         $project: {
           month: '$_id',
-          deposits: 1,
-          investments: 1,
-          total: { $add: ['$deposits', '$investments'] },
+          typeBreakdown: 1,
+          total: { $sum: '$typeBreakdown.total' },
           _id: 0
         }
       },
@@ -739,6 +762,7 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
     const totals = <span class="cstat-no" title="statement not covered" >await MonthlyEntry.aggregate(pipeline);</span>
 <span class="cstat-no" title="statement not covered" >    res.json(totals);</span>
   } catch (error) {
+<span class="cstat-no" title="statement not covered" >    console.error('Analytics error:', error);</span>
 <span class="cstat-no" title="statement not covered" >    res.status(500).json({ error: 'Failed to fetch analytics' });</span>
   }
 });
@@ -751,7 +775,7 @@ const { authenticate } = <span class="cstat-no" title="statement not covered" >r
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-31T20:49:51.871Z
+                at 2026-03-09T19:18:59.238Z
             </div>
         <script src="../../prettify.js"></script>
         <script>
