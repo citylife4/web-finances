@@ -5,8 +5,8 @@ services:
     container_name: finance-tracker-mongo
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
       MONGO_INITDB_DATABASE: finance-tracker
     ports:
       - "27017:27017"
@@ -15,6 +15,12 @@ services:
       - ./mongo-init:/docker-entrypoint-initdb.d
     networks:
       - finance-tracker-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Backend API
   backend:
@@ -25,13 +31,16 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      MONGODB_URI: mongodb://admin:password123@mongodb:27017/finance-tracker?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password123}@mongodb:27017/finance-tracker?authSource=admin
       PORT: 3001
-      CORS_ORIGINS: http://localhost,http://localhost:80
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:80}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env file}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET must be set in .env file}
     ports:
       - "3001:3001"
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     networks:
       - finance-tracker-network
 

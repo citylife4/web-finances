@@ -5,8 +5,8 @@ services:
     container_name: finance-tracker-mongo-dev
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password123}
       MONGO_INITDB_DATABASE: finance-tracker
     ports:
       - "27017:27017"
@@ -14,6 +14,12 @@ services:
       - mongodb_data_dev:/data/db
     networks:
       - finance-tracker-dev
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Backend API (Development)
   backend:
@@ -24,12 +30,16 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      MONGODB_URI: mongodb://admin:password123@mongodb:27017/finance-tracker?authSource=admin
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password123}@mongodb:27017/finance-tracker?authSource=admin
       PORT: 3001
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-refresh-secret-key-change-in-production}
     ports:
       - "3001:3001"
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
     volumes:
       - ./backend:/app
       - /app/node_modules
