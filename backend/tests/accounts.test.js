@@ -9,6 +9,12 @@ jest.mock('../src/models', () => ({
     findByIdAndUpdate: jest.fn(),
     findByIdAndDelete: jest.fn()
   },
+  CategoryType: {
+    findById: jest.fn()
+  },
+  Category: {
+    findById: jest.fn()
+  },
   MonthlyEntry: {
     deleteMany: jest.fn()
   }
@@ -24,7 +30,7 @@ jest.mock('../src/middleware/auth', () => ({
   optionalAuth: (req, res, next) => next()
 }));
 
-const { Account, MonthlyEntry } = require('../src/models');
+const { Account, MonthlyEntry, CategoryType, Category } = require('../src/models');
 
 // Create a test app
 const createTestApp = () => {
@@ -51,7 +57,9 @@ describe('Accounts Routes', () => {
 
       Account.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockResolvedValue(mockAccounts)
+          populate: jest.fn().mockReturnValue({
+            sort: jest.fn().mockResolvedValue(mockAccounts)
+          })
         })
       });
 
@@ -65,7 +73,9 @@ describe('Accounts Routes', () => {
     it('should return 500 on database error', async () => {
       Account.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockRejectedValue(new Error('Database error'))
+          populate: jest.fn().mockReturnValue({
+            sort: jest.fn().mockRejectedValue(new Error('Database error'))
+          })
         })
       });
 
@@ -86,17 +96,19 @@ describe('Accounts Routes', () => {
       expect(response.body.error).toContain('required');
     });
 
-    it('should return 400 if type is invalid', async () => {
+    it('should return 400 if typeId is invalid', async () => {
+      CategoryType.findById.mockResolvedValue(null);
+
       const response = await request(app)
         .post('/api/accounts')
         .send({
           name: 'Test Account',
-          type: 'invalid',
-          categoryId: '507f1f77bcf86cd799439011'
+          typeId: '507f1f77bcf86cd799439011',
+          categoryId: '507f1f77bcf86cd799439012'
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('deposits or investments');
+      expect(response.body.error).toContain('Invalid category type');
     });
   });
 

@@ -9,6 +9,10 @@ jest.mock('../src/models', () => ({
     findByIdAndUpdate: jest.fn(),
     findByIdAndDelete: jest.fn()
   },
+  CategoryType: {
+    findOne: jest.fn(),
+    findById: jest.fn()
+  },
   Account: {
     countDocuments: jest.fn()
   }
@@ -23,7 +27,7 @@ jest.mock('../src/middleware/auth', () => ({
   }
 }));
 
-const { Category, Account } = require('../src/models');
+const { Category, CategoryType, Account } = require('../src/models');
 
 // Create a test app
 const createTestApp = () => {
@@ -49,7 +53,9 @@ describe('Categories Routes', () => {
       ];
 
       Category.find.mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockCategories)
+        populate: jest.fn().mockReturnValue({
+          sort: jest.fn().mockResolvedValue(mockCategories)
+        })
       });
 
       const response = await request(app).get('/api/categories');
@@ -59,27 +65,33 @@ describe('Categories Routes', () => {
     });
   });
 
-  describe('GET /api/categories/:type', () => {
-    it('should return categories by type', async () => {
+  describe('GET /api/categories/by-name/:typeName', () => {
+    it('should return categories by type name', async () => {
       const mockCategories = [
         { _id: '1', name: 'Bank Accounts', type: 'deposits' }
       ];
+      const mockCategoryType = { _id: '507f1f77bcf86cd799439011', name: 'deposits' };
 
+      CategoryType.findOne.mockResolvedValue(mockCategoryType);
       Category.find.mockReturnValue({
-        sort: jest.fn().mockResolvedValue(mockCategories)
+        populate: jest.fn().mockReturnValue({
+          sort: jest.fn().mockResolvedValue(mockCategories)
+        })
       });
 
-      const response = await request(app).get('/api/categories/deposits');
+      const response = await request(app).get('/api/categories/by-name/deposits');
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(mockCategories);
     });
 
-    it('should return 400 for invalid type', async () => {
-      const response = await request(app).get('/api/categories/invalid');
+    it('should return 404 for unknown type name', async () => {
+      CategoryType.findOne.mockResolvedValue(null);
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid category type');
+      const response = await request(app).get('/api/categories/by-name/invalid');
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Category type not found');
     });
   });
 
