@@ -98,11 +98,12 @@ For detailed Docker documentation, see [DOCKER.md](./DOCKER.md).
 ### Development
 - **Frontend**: http://localhost:5173/
 - **Backend API**: http://localhost:3001/api/
-- **MongoDB**: localhost:27017
+- **MongoDB**: Internal to the Docker network
 
 ### Production (Docker)
 - **Frontend**: http://localhost/
 - **Backend API**: http://localhost:3001/api/
+- **MongoDB**: Internal to the Docker network
 
 ## 📖 Usage
 

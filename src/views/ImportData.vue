@@ -181,7 +181,7 @@
               <tbody>
                 <tr v-for="account in previewData.accounts" :key="account.name">
                   <td>{{ account.name }}</td>
-                  <td>{{ account.type }}</td>
+                  <td>{{ account.typeName }}</td>
                   <td>{{ account.categoryName }}</td>
                   <td>
                     <span class="status-badge" :class="account.exists ? 'existing' : 'new'">
@@ -397,18 +397,112 @@ export default {
       const parsedData = this.parseReverseTableData(jsonData)
       this.previewData = await this.preparePreviewData(parsedData)
     },
+
+    normalizeCellText(value) {
+      if (value === undefined || value === null) {
+        return ''
+      }
+
+      return String(value).trim()
+    },
+
+    normalizeMonthToken(value) {
+      return this.normalizeCellText(value)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+    },
+
+    normalizeNumberString(value, separator) {
+      const lastSeparatorIndex = value.lastIndexOf(separator)
+      const decimalDigits = value.length - lastSeparatorIndex - 1
+      const treatAsDecimal = decimalDigits >= 1 && decimalDigits <= 2
+
+      if (!treatAsDecimal) {
+        return value.split(separator).join('')
+      }
+
+      const integerPart = value.slice(0, lastSeparatorIndex).split(separator).join('')
+      const fractionPart = value.slice(lastSeparatorIndex + 1)
+
+      return `${integerPart}.${fractionPart}`
+    },
+
+    parseAmount(value) {
+      if (value === undefined || value === null || value === '') {
+        return null
+      }
+
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null
+      }
+
+      let normalizedValue = this.normalizeCellText(value)
+      if (!normalizedValue) {
+        return null
+      }
+
+      let isNegative = false
+
+      if (/^\(.*\)$/.test(normalizedValue)) {
+        isNegative = true
+        normalizedValue = normalizedValue.slice(1, -1)
+      }
+
+      normalizedValue = normalizedValue
+        .replace(/\s+/g, '')
+        .replace(/[€$£¥]/g, '')
+        .replace(/'/g, '')
+        .replace(/[^\d,\.\-+]/g, '')
+
+      if (!normalizedValue || /^[-+]?$/.test(normalizedValue)) {
+        return null
+      }
+
+      const hasComma = normalizedValue.includes(',')
+      const hasDot = normalizedValue.includes('.')
+
+      if (hasComma && hasDot) {
+        const lastCommaIndex = normalizedValue.lastIndexOf(',')
+        const lastDotIndex = normalizedValue.lastIndexOf('.')
+        const decimalSeparator = lastCommaIndex > lastDotIndex ? ',' : '.'
+        const thousandsSeparator = decimalSeparator === ',' ? '.' : ','
+        const decimalIndex = normalizedValue.lastIndexOf(decimalSeparator)
+        const integerPart = normalizedValue
+          .slice(0, decimalIndex)
+          .split(thousandsSeparator)
+          .join('')
+          .replace(new RegExp(`\\${decimalSeparator}`, 'g'), '')
+        const fractionPart = normalizedValue
+          .slice(decimalIndex + 1)
+          .split(thousandsSeparator)
+          .join('')
+
+        normalizedValue = `${integerPart}.${fractionPart}`
+      } else if (hasComma) {
+        normalizedValue = this.normalizeNumberString(normalizedValue, ',')
+      } else if (hasDot) {
+        normalizedValue = this.normalizeNumberString(normalizedValue, '.')
+      }
+
+      const parsedAmount = Number(normalizedValue)
+
+      if (!Number.isFinite(parsedAmount)) {
+        return null
+      }
+
+      return isNegative ? -Math.abs(parsedAmount) : parsedAmount
+    },
     
     parseReverseTableData(jsonData) {
-      // Extract headers (months/years) from first row, skipping first 3 columns (Bank/Wallet, Type, Sub-type)
-      // Normalize headers to strings before trimming to avoid "header.trim is not a function" when
-      // a header cell is not already a string (e.g. number, Date, or array).
-      const headers = jsonData[0]
+      const monthColumns = jsonData[0]
         .slice(3)
-        .map(h => (h === undefined || h === null) ? '' : String(h))
-        .map(h => h.trim())
-        .filter(h => h)
+        .map((headerValue, index) => ({
+          columnIndex: index + 3,
+          month: this.parseMonthYear(headerValue)
+        }))
       
-      if (headers.length === 0) {
+      if (!monthColumns.some(column => column.month)) {
         throw new Error('No month/year columns found. Make sure your data has columns after the first 3 (Bank/Wallet, Type, Category).')
       }
       
@@ -418,11 +512,11 @@ export default {
       // Process data rows (starting from row 2, index 1)
       for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
         const row = jsonData[rowIndex]
-        const accountName = row[0]
-        const accountType = row[1]
-        const subTypeOrCategory = row[2]
+        const accountName = this.normalizeCellText(row[0])
+        const accountType = this.normalizeCellText(row[1])
+        const subTypeOrCategory = this.normalizeCellText(row[2])
         
-        if (!accountName || accountName.trim() === '') {
+        if (!accountName) {
           continue
         }
         
@@ -431,7 +525,7 @@ export default {
         }
         
         // Validate account type - find matching category type
-        const normalizedType = accountType.trim().toLowerCase()
+        const normalizedType = accountType.toLowerCase()
         const matchingType = store.categoryTypes.find(t => t.name === normalizedType)
         
         if (!matchingType) {
@@ -439,18 +533,18 @@ export default {
         }
         
         // Determine category name from third column
-        const categoryName = subTypeOrCategory.trim()
+        const categoryName = subTypeOrCategory
         
         // Add account (check for duplicates)
         let account = accounts.find(acc => 
-          acc.name === accountName.trim() && 
+          acc.name === accountName && 
           acc.typeName === normalizedType && 
           acc.categoryName === categoryName
         )
         
         if (!account) {
           account = {
-            name: accountName.trim(),
+            name: accountName,
             typeName: normalizedType,
             typeId: matchingType._id,
             categoryName: categoryName
@@ -458,33 +552,29 @@ export default {
           accounts.push(account)
         }
         
-        // Process monthly data (starting from column 3, index 3)
-        for (let colIndex = 3; colIndex < row.length && (colIndex - 3) < headers.length; colIndex++) {
-          const monthHeader = headers[colIndex - 3]
-          const amount = row[colIndex]
+        for (const monthColumn of monthColumns) {
+          if (!monthColumn.month) {
+            continue
+          }
+
+          const amount = row[monthColumn.columnIndex]
           
           if (amount === undefined || amount === null || amount === '') {
             continue // Skip empty cells
           }
           
-          const numAmount = parseFloat(amount)
-          if (isNaN(numAmount)) {
+          const numAmount = this.parseAmount(amount)
+          if (numAmount === null) {
             continue // Skip non-numeric values
-          }
-          
-          // Parse month/year
-          const monthYear = this.parseMonthYear(monthHeader)
-          if (!monthYear) {
-            continue // Skip invalid dates
           }
           
           // Add entry
           entries.push({
-            accountName: accountName.trim(),
+            accountName: accountName,
             accountTypeName: normalizedType,
             accountTypeId: matchingType._id,
             categoryName: categoryName,
-            month: monthYear,
+            month: monthColumn.month,
             amount: numAmount
           })
         }
@@ -495,41 +585,93 @@ export default {
     
     parseMonthYear(monthHeader) {
       // Handle JavaScript Date objects (from Excel dates with cellDates: true)
-      if (monthHeader instanceof Date) {
+      if (monthHeader instanceof Date && !Number.isNaN(monthHeader.getTime())) {
         const year = monthHeader.getFullYear()
         const month = (monthHeader.getMonth() + 1).toString().padStart(2, '0')
         return `${year}-${month}`
       }
 
-      const header = monthHeader.toString().trim()
+      if (monthHeader === undefined || monthHeader === null || monthHeader === '') {
+        return null
+      }
 
-      // Check if it's an Excel serial date number (positive number > 1000)
-      if (!isNaN(monthHeader) && monthHeader > 1000) {
+      if (!Number.isNaN(Number(monthHeader)) && Number(monthHeader) > 1000) {
         try {
-          // Excel serial date: days since 1900-01-01
           const excelEpoch = new Date(1900, 0, 1)
-          const daysOffset = monthHeader - 2 // Excel incorrectly treats 1900 as a leap year
+          const daysOffset = Number(monthHeader) - 2
           const date = new Date(excelEpoch.getTime() + daysOffset * 24 * 60 * 60 * 1000)
 
-          const year = date.getFullYear()
-          const month = (date.getMonth() + 1).toString().padStart(2, '0')
-          return `${year}-${month}`
+          if (!Number.isNaN(date.getTime())) {
+            const year = date.getFullYear()
+            const month = (date.getMonth() + 1).toString().padStart(2, '0')
+            return `${year}-${month}`
+          }
         } catch (e) {
           // If date conversion fails, continue with string parsing
         }
       }
 
+      const header = this.normalizeCellText(monthHeader)
+      if (!header) {
+        return null
+      }
+
+      const isoDate = new Date(header)
+      if (!Number.isNaN(isoDate.getTime()) && /^\d{4}-\d{2}-\d{2}/.test(header)) {
+        const year = isoDate.getFullYear()
+        const month = (isoDate.getMonth() + 1).toString().padStart(2, '0')
+        return `${year}-${month}`
+      }
+
       // Try to parse various formats like "Jan/2023", "January 2023", "01/2023", etc.
       const patterns = [
-        /^(\w{3})\/(\d{4})$/i,  // Jan/2023
-        /^(\w{3})\s+(\d{4})$/i, // Jan 2023
+        /^([^\d\s\/']{3,})\/(\d{4})$/i,  // Jan/2023, Mär/2023
+        /^([^\d\s']{3,})\s+(\d{4})$/i, // Jan 2023, Mär 2023
         /^(\d{1,2})\/(\d{4})$/,  // 1/2023 or 01/2023
-        /^(\w+)\s+(\d{4})$/i,    // January 2023
-        /^'(\w{3})\/(\d{4})$/i,  // 'Jan/2023
-        /^'(\w{3})\s+(\d{4})$/i, // 'Jan 2023
+        /^([^\d\s']+)\s+(\d{4})$/i,    // January 2023, Mai 2023
+        /^'([^\d\s\/']{3,})\/(\d{4})$/i,  // 'Jan/2023, 'Mär/2023
+        /^'([^\d\s']{3,})\s+(\d{4})$/i, // 'Jan 2023, 'Mär 2023
         /^'(\d{1,2})\/(\d{4})$/,  // '1/2023 or '01/2023
-        /^'(\w+)\s+(\d{4})$/i    // 'January 2023
+        /^'([^\d\s']+)\s+(\d{4})$/i    // 'January 2023, 'Mai 2023
       ]
+
+      const monthLookup = {
+        jan: '01',
+        january: '01',
+        januar: '01',
+        feb: '02',
+        february: '02',
+        februar: '02',
+        mar: '03',
+        march: '03',
+        marz: '03',
+        maerz: '03',
+        apr: '04',
+        april: '04',
+        may: '05',
+        mai: '05',
+        jun: '06',
+        june: '06',
+        juni: '06',
+        jul: '07',
+        july: '07',
+        juli: '07',
+        aug: '08',
+        august: '08',
+        sep: '09',
+        sept: '09',
+        september: '09',
+        oct: '10',
+        october: '10',
+        okt: '10',
+        oktober: '10',
+        nov: '11',
+        november: '11',
+        dec: '12',
+        december: '12',
+        dez: '12',
+        dezember: '12'
+      }
 
       for (const pattern of patterns) {
         const match = header.match(pattern)
@@ -539,23 +681,21 @@ export default {
 
           // Convert month name to number
           if (isNaN(month)) {
-            const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                              'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
-            const fullMonthNames = ['january', 'february', 'march', 'april', 'may', 'june',
-                                   'july', 'august', 'september', 'october', 'november', 'december']
+            const normalizedMonth = this.normalizeMonthToken(month)
+            const mappedMonth = monthLookup[normalizedMonth] || monthLookup[normalizedMonth.substring(0, 3)]
 
-            const shortIndex = monthNames.indexOf(month.toLowerCase().substring(0, 3))
-            const fullIndex = fullMonthNames.indexOf(month.toLowerCase())
-
-            if (shortIndex !== -1) {
-              month = (shortIndex + 1).toString().padStart(2, '0')
-            } else if (fullIndex !== -1) {
-              month = (fullIndex + 1).toString().padStart(2, '0')
-            } else {
+            if (!mappedMonth) {
               continue // Try next pattern
             }
+
+            month = mappedMonth
           } else {
-            month = parseInt(month).toString().padStart(2, '0')
+            const monthNumber = parseInt(month, 10)
+            if (monthNumber < 1 || monthNumber > 12) {
+              continue
+            }
+
+            month = monthNumber.toString().padStart(2, '0')
           }
 
           return `${year}-${month}`

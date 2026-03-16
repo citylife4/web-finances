@@ -30,6 +30,10 @@ The importer supports various month/year formats:
 - `January 2023`
 - `01/2023`
 - `1/2023`
+- Common German month labels such as `Mär/2023`, `Mai 2023`, and `Okt 2023`
+- Excel date-formatted header cells such as a spreadsheet cell formatted as `Jan 2023`
+
+Blank month columns in the header row are ignored and no longer shift later values into the wrong month.
 
 ## Account Types
 
@@ -53,6 +57,8 @@ The importer validates:
 - Date format parsing
 - Numeric values for amounts
 - Account type validation (must be 'deposits' or 'investments')
+
+Amount cells can be plain numeric cells or formatted strings such as `1,234.56`, `1.234,56`, `€1.234,56`, or `(2,500.75)`.
 
 ## Error Handling
 
