@@ -1,62 +1,59 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { authStore } from '../store/auth-store'
-import Dashboard from '../views/Dashboard.vue'
-import AccountManager from '../views/AccountManager.vue'
-import MonthlyEntry from '../views/MonthlyEntry.vue'
-import ImportData from '../views/ImportData.vue'
-import CategoryManager from '../views/CategoryManager.vue'
-import CategoryTypeManager from '../views/CategoryTypeManager.vue'
-import Login from '../views/Login.vue'
-import Register from '../views/Register.vue'
 
 const routes = [
   {
     path: '/login',
     name: 'Login',
-    component: Login,
+    component: () => import('../views/Login.vue'),
     meta: { requiresGuest: true }
   },
   {
     path: '/register',
     name: 'Register',
-    component: Register,
+    component: () => import('../views/Register.vue'),
     meta: { requiresGuest: true }
   },
   {
     path: '/',
     name: 'Dashboard',
-    component: Dashboard,
+    component: () => import('../views/Dashboard.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/accounts',
     name: 'AccountManager',
-    component: AccountManager,
+    component: () => import('../views/AccountManager.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/categories',
     name: 'CategoryManager',
-    component: CategoryManager,
+    component: () => import('../views/CategoryManager.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/category-types',
     name: 'CategoryTypeManager',
-    component: CategoryTypeManager,
+    component: () => import('../views/CategoryTypeManager.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/entry',
     name: 'MonthlyEntry',
-    component: MonthlyEntry,
+    component: () => import('../views/MonthlyEntry.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/import',
     name: 'ImportData',
-    component: ImportData,
+    component: () => import('../views/ImportData.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'NotFound',
+    redirect: '/'
   }
 ]
 

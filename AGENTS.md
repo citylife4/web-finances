@@ -333,7 +333,7 @@ web-finances/
 - [ ] Console.log statements in production - Consider using a logger
 - [ ] Missing input sanitization - Consider adding express-validator
 - [ ] Missing error boundaries - Add Vue error boundary component
-- [ ] Using alert()/confirm() instead of modals - Create modal components
+- [x] ~~Using alert()/confirm() instead of modals~~ - ConfirmModal component created and used throughout
 
 ### Implemented Features
 

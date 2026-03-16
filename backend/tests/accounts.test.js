@@ -6,8 +6,16 @@ jest.mock('../src/models', () => ({
   Account: {
     find: jest.fn(),
     findById: jest.fn(),
-    findByIdAndUpdate: jest.fn(),
-    findByIdAndDelete: jest.fn()
+    findOne: jest.fn(),
+    findOneAndUpdate: jest.fn(),
+    findOneAndDelete: jest.fn()
+  },
+  CategoryType: {
+    find: jest.fn(),
+    findById: jest.fn()
+  },
+  Category: {
+    findOne: jest.fn()
   },
   MonthlyEntry: {
     deleteMany: jest.fn()
@@ -24,7 +32,7 @@ jest.mock('../src/middleware/auth', () => ({
   optionalAuth: (req, res, next) => next()
 }));
 
-const { Account, MonthlyEntry } = require('../src/models');
+const { Account, CategoryType, MonthlyEntry } = require('../src/models');
 
 // Create a test app
 const createTestApp = () => {
@@ -45,14 +53,19 @@ describe('Accounts Routes', () => {
   describe('GET /api/accounts', () => {
     it('should return all accounts', async () => {
       const mockAccounts = [
-        { _id: '1', name: 'Savings', type: 'deposits' },
-        { _id: '2', name: 'Stocks', type: 'investments' }
+        { _id: '1', name: 'Savings' },
+        { _id: '2', name: 'Stocks' }
       ];
 
       Account.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockResolvedValue(mockAccounts)
+          populate: jest.fn().mockReturnValue({
+            sort: jest.fn().mockResolvedValue(mockAccounts)
+          })
         })
+      });
+      CategoryType.find.mockReturnValue({
+        select: jest.fn().mockResolvedValue([])
       });
 
       const response = await request(app).get('/api/accounts');
@@ -65,7 +78,9 @@ describe('Accounts Routes', () => {
     it('should return 500 on database error', async () => {
       Account.find.mockReturnValue({
         populate: jest.fn().mockReturnValue({
-          sort: jest.fn().mockRejectedValue(new Error('Database error'))
+          populate: jest.fn().mockReturnValue({
+            sort: jest.fn().mockRejectedValue(new Error('Database error'))
+          })
         })
       });
 
@@ -86,23 +101,23 @@ describe('Accounts Routes', () => {
       expect(response.body.error).toContain('required');
     });
 
-    it('should return 400 if type is invalid', async () => {
+    it('should return 400 if typeId is invalid', async () => {
       const response = await request(app)
         .post('/api/accounts')
         .send({
           name: 'Test Account',
-          type: 'invalid',
+          typeId: 'invalid',
           categoryId: '507f1f77bcf86cd799439011'
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('deposits or investments');
+      expect(response.body.error).toBe('Invalid typeId or categoryId');
     });
   });
 
   describe('DELETE /api/accounts/:id', () => {
     it('should delete account and related entries', async () => {
-      Account.findByIdAndDelete.mockResolvedValue({ _id: '1', name: 'Test' });
+      Account.findOneAndDelete.mockResolvedValue({ _id: '1', name: 'Test' });
       MonthlyEntry.deleteMany.mockResolvedValue({ deletedCount: 5 });
 
       const response = await request(app).delete('/api/accounts/507f1f77bcf86cd799439011');
@@ -113,7 +128,7 @@ describe('Accounts Routes', () => {
     });
 
     it('should return 404 if account not found', async () => {
-      Account.findByIdAndDelete.mockResolvedValue(null);
+      Account.findOneAndDelete.mockResolvedValue(null);
 
       const response = await request(app).delete('/api/accounts/507f1f77bcf86cd799439011');
 

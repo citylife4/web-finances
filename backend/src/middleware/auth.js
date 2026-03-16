@@ -1,9 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const { JWT_SECRET } = require('../config');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-
-// Middleware to verify access token
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -43,7 +41,7 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-// Optional authentication - attaches user if token present, but doesn't require it
+// Attaches user if token present, but doesn't require it
 const optionalAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;

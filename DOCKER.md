@@ -119,7 +119,7 @@ swapon --show
 |----------|------------------|-----------------|-------------|
 | Frontend | 5173            | 80              | Vue.js application |
 | Backend  | 3001            | 3001            | Express.js API |
-| MongoDB  | 27017           | 27017           | Database |
+| MongoDB  | Internal only   | Internal only   | Database |
 
 ## 🛠️ Make Commands
 
@@ -172,6 +172,8 @@ make health
 curl http://localhost:3001/api/health
 curl http://localhost:5173  # or :80 for production
 ```
+
+MongoDB is only exposed inside the Docker network by default. Use `make shell-mongo` if you need a Mongo shell from the running containers.
 
 ## 🔒 Environment Variables
 

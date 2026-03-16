@@ -47,6 +47,7 @@
 
 <script>
 import { authStore } from '../store/auth-store'
+import { store } from '../store/api-store'
 
 export default {
   name: 'Login',
@@ -68,16 +69,12 @@ export default {
           email: this.email,
           password: this.password
         })
-        
-        // Initialize store with user data after successful login
-        const { store } = await import('../store/api-store')
+
         await store.initialize()
-        
-        // Redirect to dashboard after successful login
+
         this.$router.push('/')
       } catch (error) {
         this.error = error.response?.data?.error || 'Login failed. Please try again.'
-        console.error('Login error:', error)
       } finally {
         this.loading = false
       }

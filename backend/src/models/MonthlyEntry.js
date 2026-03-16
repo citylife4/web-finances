@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const monthlyEntrySchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
   accountId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Account',
@@ -14,7 +20,6 @@ const monthlyEntrySchema = new mongoose.Schema({
   amount: {
     type: Number,
     required: true
-    // Negative amounts allowed for credit cards, loans, debts, etc.
   }
 }, {
   timestamps: true

@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const accountSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
   name: {
     type: String,
     required: true,
@@ -11,12 +17,7 @@ const accountSchema = new mongoose.Schema({
     ref: 'CategoryType',
     required: true
   },
-  // Keep type field for backward compatibility during migration
-  type: {
-    type: String,
-    trim: true
-  },
-  categoryId: {
+    categoryId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: true

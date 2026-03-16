@@ -5,16 +5,12 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  withCredentials: true // Enable cookies for refresh tokens
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true
 })
 
-// Token management
 let accessToken = localStorage.getItem('accessToken')
 
-// Set access token
 export const setAccessToken = (token) => {
   accessToken = token
   if (token) {
@@ -27,7 +23,6 @@ export const setAccessToken = (token) => {
 // Get access token
 export const getAccessToken = () => accessToken
 
-// Request interceptor to add auth header
 api.interceptors.request.use(
   (config) => {
     if (accessToken) {
@@ -64,7 +59,6 @@ api.interceptors.response.use(
         !originalRequest._retry) {
       
       if (isRefreshing) {
-        // Wait for the refresh to complete
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         }).then(token => {
@@ -86,7 +80,6 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null)
         setAccessToken(null)
-        // Redirect to login or emit event
         window.dispatchEvent(new CustomEvent('auth:logout'))
         return Promise.reject(refreshError)
       } finally {
@@ -98,12 +91,8 @@ api.interceptors.response.use(
   }
 )
 
-// Auth API calls
 export const authAPI = {
-  // Register new user
   register: (userData) => api.post('/auth/register', userData),
-  
-  // Login user
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials)
     if (response.data.accessToken) {
@@ -112,110 +101,51 @@ export const authAPI = {
     return response
   },
   
-  // Refresh token
   refresh: () => api.post('/auth/refresh'),
-  
-  // Logout
   logout: async () => {
     const response = await api.post('/auth/logout')
     setAccessToken(null)
     return response
   },
   
-  // Logout from all devices
   logoutAll: async () => {
     const response = await api.post('/auth/logout-all')
     setAccessToken(null)
     return response
   },
   
-  // Get current user
   me: () => api.get('/auth/me')
 }
 
-// Account API calls
 export const accountsAPI = {
-  // Get all accounts
   getAll: () => api.get('/accounts'),
-  
-  // Create a new account
   create: (accountData) => api.post('/accounts', accountData),
-  
-  // Update an account
   update: (id, accountData) => api.put(`/accounts/${id}`, accountData),
-  
-  // Delete an account
   delete: (id) => api.delete(`/accounts/${id}`)
 }
 
-// Monthly entries API calls
 export const entriesAPI = {
-  // Get all entries
   getAll: () => api.get('/entries'),
-  
-  // Get entries for a specific month
   getByMonth: (month) => api.get(`/entries/month/${month}`),
-  
-  // Create or update multiple entries
-  createOrUpdate: (entries) => {
-    console.log('📤 Sending entries to API:', entries)
-    return api.post('/entries', { entries })
-      .then(response => {
-        console.log('✅ Entries saved successfully:', response.data)
-        return response
-      })
-      .catch(error => {
-        console.error('❌ Failed to save entries:', error.response?.data || error.message)
-        throw error
-      })
-  },
-  
-  // Update a single entry
+  createOrUpdate: (entries) => api.post('/entries', { entries }),
   update: (id, entryData) => api.put(`/entries/${id}`, entryData),
-  
-  // Delete an entry
   delete: (id) => api.delete(`/entries/${id}`),
-  
-  // Get analytics totals
   getTotals: () => api.get('/entries/analytics/totals')
 }
 
-// Category API calls
 export const categoriesAPI = {
-  // Get all categories
   getAll: () => api.get('/categories'),
-  
-  // Get categories by type ID
   getByTypeId: (typeId) => api.get(`/categories/type/${typeId}`),
-  
-  // Get categories by type name (backward compatibility)
-  getByTypeName: (typeName) => api.get(`/categories/by-name/${typeName}`),
-  
-  // Create a new category
   create: (categoryData) => api.post('/categories', categoryData),
-  
-  // Update a category
   update: (id, categoryData) => api.put(`/categories/${id}`, categoryData),
-  
-  // Delete a category
   delete: (id) => api.delete(`/categories/${id}`)
 }
 
-// Category Type API calls
 export const categoryTypesAPI = {
-  // Get all category types
   getAll: () => api.get('/category-types'),
-  
-  // Get a single category type
   getById: (id) => api.get(`/category-types/${id}`),
-  
-  // Create a new category type
   create: (typeData) => api.post('/category-types', typeData),
-  
-  // Update a category type
   update: (id, typeData) => api.put(`/category-types/${id}`, typeData),
-  
-  // Delete a category type
   delete: (id) => api.delete(`/category-types/${id}`)
 }
 

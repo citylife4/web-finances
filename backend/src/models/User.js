@@ -83,9 +83,6 @@ userSchema.methods.removeAllRefreshTokens = function() {
   this.refreshTokens = [];
 };
 
-// Note: email index is already created by 'unique: true' in schema
-
-// Don't return password and refresh tokens in JSON
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;

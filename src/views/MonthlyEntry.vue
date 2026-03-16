@@ -124,10 +124,13 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { store } from '../store/api-store'
 import { format } from 'date-fns'
+import { useToast } from '../components/ToastContainer.vue'
+import { formatCurrency } from '../utils/formatters'
 
 export default {
   name: 'MonthlyEntry',
   setup() {
+    const toast = useToast()
     const selectedMonth = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM format
     const accountValues = ref({})
     const showSuccessMessage = ref(false)
@@ -176,7 +179,7 @@ export default {
     })
 
     const hasAnyValue = computed(() => {
-      return Object.values(accountValues.value).some(value => value && value > 0)
+      return Object.values(accountValues.value).some(value => value !== '' && value !== null && value !== undefined)
     })
 
     const initializeAccountValues = () => {
@@ -201,7 +204,7 @@ export default {
           accountValues.value[accountId] = entry.amount
         })
       } catch (error) {
-        console.error('Failed to load existing entries:', error)
+        // ignored — entries may not exist yet
       }
     }
 
@@ -222,7 +225,7 @@ export default {
       try {
         // Prepare entries for API
         const entries = Object.entries(accountValues.value)
-          .filter(([accountId, amount]) => amount && amount > 0)
+          .filter(([accountId, amount]) => amount !== '' && amount !== null && amount !== undefined)
           .map(([accountId, amount]) => ({
             accountId,
             month: selectedMonth.value,
@@ -237,17 +240,12 @@ export default {
           showSuccessMessage.value = false
         }, 3000)
       } catch (error) {
-        console.error('Failed to save entries:', error)
-        alert('Failed to save entries. Please try again.')
+        toast.error('Failed to save entries. Please try again.')
       }
     }
 
     const clearForm = () => {
       initializeAccountValues()
-    }
-
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
     }
 
     // Watch for month changes to load existing entries
@@ -268,7 +266,7 @@ export default {
         initializeAccountValues()
         loadExistingEntries()
       } catch (error) {
-        console.error('Failed to load data:', error)
+        // ignored — store handles errors
       }
     })
 
