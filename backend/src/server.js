@@ -3,10 +3,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
+const config = require('./config');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 // Trust proxy for rate limiting behind reverse proxy
 app.set('trust proxy', 1);
@@ -14,43 +13,31 @@ app.set('trust proxy', 1);
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 300 : 500, // 300 in prod, 500 in dev
+  max: config.isProduction ? 300 : 500,
   message: { error: 'Too many requests, please try again later.' },
   standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => {
-    // Skip rate limiting for authenticated users on specific routes if needed
-    // This allows authenticated imports to proceed without hitting limits
-    return false;
-  }
+  legacyHeaders: false
 });
 
-// Apply rate limiting to all requests (skip in development if needed)
 app.use(limiter);
 
 // More aggressive rate limiting for auth routes
-// Higher limit in development for easier testing
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 10 : 50, // 10 in prod, 50 in dev
+  max: config.isProduction ? 10 : 50,
   message: { error: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 
 // CORS configuration
-const allowedOrigins = process.env.CORS_ORIGINS 
-  ? process.env.CORS_ORIGINS.split(',') 
-  : ['http://localhost:5173', 'http://localhost:3000'];
-
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified origin.';
-      return callback(new Error(msg), false);
+
+    if (!config.corsOrigins.includes(origin)) {
+      return callback(new Error('The CORS policy for this site does not allow access from the specified origin.'), false);
     }
     return callback(null, true);
   },
@@ -67,9 +54,7 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/finance-tracker';
-
-mongoose.connect(MONGODB_URI)
+mongoose.connect(config.mongodbUri)
   .then(async () => {
     console.log('Connected to MongoDB');
     // Seed default category types if they don't exist
@@ -79,7 +64,11 @@ mongoose.connect(MONGODB_URI)
       { name: 'investments', displayName: 'Investments', description: 'Stocks, bonds, mutual funds, and other investment accounts', color: '#2196F3', icon: '📈', isSystem: true }
     ];
     for (const type of defaultTypes) {
-      await CategoryType.findOneAndUpdate({ name: type.name }, { $setOnInsert: type }, { upsert: true });
+      await CategoryType.findOneAndUpdate(
+        { name: type.name, isSystem: true },
+        { $setOnInsert: type },
+        { upsert: true }
+      );
     }
   })
   .catch((error) => {
@@ -95,24 +84,15 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/category-types', require('./routes/category-types'));
 
 // Health check endpoint
-app.get('/api/health', async (req, res) => {
-  try {
-    // Check MongoDB connection
-    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-    
-    res.json({ 
-      status: 'OK', 
-      message: 'Finance Tracker API is running',
-      database: dbStatus,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(503).json({ 
-      status: 'ERROR', 
-      message: 'Service unhealthy',
-      error: error.message 
-    });
-  }
+app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+
+  res.json({
+    status: 'OK',
+    message: 'Finance Tracker API is running',
+    database: dbStatus,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // 404 handler
@@ -123,24 +103,22 @@ app.use((req, res) => {
 // Global error handler
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
-  res.status(500).json({ 
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : err.message 
+  res.status(500).json({
+    error: config.isProduction ? 'Internal server error' : err.message
   });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+const server = app.listen(config.port, () => {
+  console.log(`Server is running on port ${config.port}`);
 });
 
 // Graceful shutdown
 const gracefulShutdown = (signal) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
-  
+
   server.close(() => {
     console.log('HTTP server closed.');
-    
+
     mongoose.connection.close(false).then(() => {
       console.log('MongoDB connection closed.');
       process.exit(0);
@@ -149,7 +127,7 @@ const gracefulShutdown = (signal) => {
       process.exit(1);
     });
   });
-  
+
   // Force close after 10 seconds
   setTimeout(() => {
     console.error('Could not close connections in time, forcefully shutting down');

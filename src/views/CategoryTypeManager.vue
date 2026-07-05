@@ -1,12 +1,12 @@
 <template>
-  <div class="category-type-manager">
+  <div class="category-type-manager page">
     <div class="page-header">
       <h2>Category Type Management</h2>
       <p class="subtitle">Manage types to organize your categories and accounts</p>
     </div>
 
     <!-- Add Category Type Section -->
-    <div class="add-type-section">
+    <div class="add-type-section panel">
       <h3>Add New Category Type</h3>
       <form @submit.prevent="addCategoryType" class="add-form">
         <div class="form-row">
@@ -72,10 +72,10 @@
     </div>
 
     <!-- Category Types List -->
-    <div class="types-list">
+    <div class="types-list panel">
       <h3>Existing Category Types</h3>
-      
-      <div v-if="store.categoryTypes.length === 0" class="no-types">
+
+      <div v-if="store.categoryTypes.length === 0" class="empty-state">
         No category types defined yet.
       </div>
       
@@ -260,265 +260,135 @@ export default {
 </script>
 
 <style scoped>
-.category-type-manager {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
-.page-header h2 {
-  color: white;
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-  font-weight: 300;
-}
-
-.subtitle {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
-  margin: 0;
-}
-
 .add-type-section {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  margin-bottom: 40px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.add-type-section h3 {
-  margin-bottom: 20px;
-  color: #333;
-  text-align: center;
+  margin-bottom: 1.5rem;
 }
 
 .add-form {
-  max-width: 600px;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.add-form .btn {
+  align-self: flex-start;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #555;
+  gap: 1.25rem;
 }
 
 .form-group small {
-  display: block;
-  margin-top: 4px;
-  color: #888;
-  font-size: 0.85rem;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
+  color: var(--color-text-soft);
+  font-size: 0.8rem;
 }
 
 .form-group input[type="color"] {
-  height: 50px;
+  height: 44px;
+  padding: 0.25rem;
   cursor: pointer;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #545b62;
-}
-
-.btn-danger {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #c82333;
 }
 
 .btn-small {
-  padding: 6px 12px;
-  font-size: 0.875rem;
-}
-
-.types-list {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 30px;
-}
-
-.types-list h3 {
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.no-types {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 40px;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
 }
 
 .types-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
 }
 
 .type-card {
-  background: white;
-  border-radius: 12px;
-  border-left: 4px solid #667eea;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  transition: box-shadow 0.15s ease;
 }
 
 .type-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .type-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
 }
 
 .type-icon {
-  font-size: 1.5rem;
+  font-size: 1.35rem;
 }
 
 .type-info h4 {
   margin: 0;
-  color: #333;
-  font-size: 1.2rem;
+  color: var(--color-text);
+  font-size: 1.05rem;
   flex: 1;
 }
 
 .system-badge {
-  background: #6c757d;
+  background: var(--color-text-muted);
   color: white;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
   font-weight: 500;
 }
 
 .type-name {
-  color: #888;
-  font-size: 0.875rem;
-  margin: 5px 0;
-  font-family: monospace;
+  color: var(--color-text-soft);
+  font-size: 0.82rem;
+  margin: 0.3rem 0;
+  font-family: ui-monospace, SFMono-Regular, monospace;
 }
 
 .description {
-  color: #666;
-  margin: 10px 0;
+  color: var(--color-text-muted);
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
   font-style: italic;
 }
 
 .color-preview {
-  width: 60px;
-  height: 30px;
-  border-radius: 4px;
-  margin: 10px 0;
-  border: 1px solid #ddd;
+  width: 56px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  margin: 0.5rem 0;
+  border: 1px solid var(--color-border);
 }
 
 .meta {
-  color: #999;
-  font-size: 0.875rem;
-  margin: 10px 0;
+  color: var(--color-text-soft);
+  font-size: 0.8rem;
+  margin: 0.5rem 0;
 }
 
 .card-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
 }
 
 .edit-form .form-group {
-  margin-bottom: 15px;
-}
-
-.edit-form input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  margin-bottom: 0.85rem;
 }
 
 @media (max-width: 768px) {
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .types-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .card-actions {
     flex-direction: column;
   }

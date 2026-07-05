@@ -3,10 +3,19 @@ const router = express.Router();
 const { CategoryType, Category, Account } = require('../models');
 const { authenticate } = require('../middleware/auth');
 
-// Get all category types
-router.get('/', authenticate, async (req, res) => {
+// Apply authentication to all routes
+router.use(authenticate);
+
+// A category type is visible to a user if it's a system type or their own
+const visibleTypeFilter = (userId, extra = {}) => ({
+  ...extra,
+  $or: [{ isSystem: true }, { userId }]
+});
+
+// GET /api/category-types - Get all category types visible to the user
+router.get('/', async (req, res) => {
   try {
-    const types = await CategoryType.find().sort({ name: 1 });
+    const types = await CategoryType.find(visibleTypeFilter(req.userId)).sort({ name: 1 });
     res.json(types);
   } catch (error) {
     console.error('Error fetching category types:', error);
@@ -14,10 +23,10 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// Get a single category type
-router.get('/:id', authenticate, async (req, res) => {
+// GET /api/category-types/:id - Get a single category type
+router.get('/:id', async (req, res) => {
   try {
-    const type = await CategoryType.findById(req.params.id);
+    const type = await CategoryType.findOne(visibleTypeFilter(req.userId, { _id: req.params.id }));
     if (!type) {
       return res.status(404).json({ error: 'Category type not found' });
     }
@@ -28,8 +37,8 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Create a new category type
-router.post('/', authenticate, async (req, res) => {
+// POST /api/category-types - Create a new category type
+router.post('/', async (req, res) => {
   try {
     const { name, displayName, description, color, icon } = req.body;
 
@@ -37,13 +46,16 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Name and display name are required' });
     }
 
-    // Check if type with this name already exists
-    const existingType = await CategoryType.findOne({ name: name.toLowerCase() });
+    // Check against types visible to this user (system types + their own)
+    const existingType = await CategoryType.findOne(
+      visibleTypeFilter(req.userId, { name: name.toLowerCase() })
+    );
     if (existingType) {
       return res.status(400).json({ error: 'A category type with this name already exists' });
     }
 
     const categoryType = new CategoryType({
+      userId: req.userId,
       name: name.toLowerCase(),
       displayName,
       description,
@@ -63,22 +75,20 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-// Update a category type
-router.put('/:id', authenticate, async (req, res) => {
+// PUT /api/category-types/:id - Update a category type (own types only)
+router.put('/:id', async (req, res) => {
   try {
     const { displayName, description, color, icon } = req.body;
-    
-    const type = await CategoryType.findById(req.params.id);
+
+    const type = await CategoryType.findOne({ _id: req.params.id, userId: req.userId });
     if (!type) {
+      const isSystemType = await CategoryType.exists({ _id: req.params.id, isSystem: true });
+      if (isSystemType) {
+        return res.status(403).json({ error: 'Cannot modify system category types' });
+      }
       return res.status(404).json({ error: 'Category type not found' });
     }
 
-    // Prevent updating system types' name
-    if (type.isSystem && req.body.name && req.body.name !== type.name) {
-      return res.status(403).json({ error: 'Cannot change name of system category types' });
-    }
-
-    // Update fields
     if (displayName) type.displayName = displayName;
     if (description !== undefined) type.description = description;
     if (color) type.color = color;
@@ -92,36 +102,35 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Delete a category type
-router.delete('/:id', authenticate, async (req, res) => {
+// DELETE /api/category-types/:id - Delete a category type (own types only)
+router.delete('/:id', async (req, res) => {
   try {
-    const type = await CategoryType.findById(req.params.id);
+    const type = await CategoryType.findOne({ _id: req.params.id, userId: req.userId });
     if (!type) {
+      const isSystemType = await CategoryType.exists({ _id: req.params.id, isSystem: true });
+      if (isSystemType) {
+        return res.status(403).json({ error: 'Cannot delete system category types' });
+      }
       return res.status(404).json({ error: 'Category type not found' });
     }
 
-    // Prevent deleting system types
-    if (type.isSystem) {
-      return res.status(403).json({ error: 'Cannot delete system category types' });
-    }
-
     // Check if any categories are using this type
-    const categoriesCount = await Category.countDocuments({ typeId: req.params.id });
+    const categoriesCount = await Category.countDocuments({ typeId: req.params.id, userId: req.userId });
     if (categoriesCount > 0) {
-      return res.status(400).json({ 
-        error: `Cannot delete category type. ${categoriesCount} categories are using this type. Please reassign or delete those categories first.` 
+      return res.status(400).json({
+        error: `Cannot delete category type. ${categoriesCount} categories are using this type. Please reassign or delete those categories first.`
       });
     }
 
     // Check if any accounts are using this type
-    const accountsCount = await Account.countDocuments({ typeId: req.params.id });
+    const accountsCount = await Account.countDocuments({ typeId: req.params.id, userId: req.userId });
     if (accountsCount > 0) {
-      return res.status(400).json({ 
-        error: `Cannot delete category type. ${accountsCount} accounts are using this type. Please reassign or delete those accounts first.` 
+      return res.status(400).json({
+        error: `Cannot delete category type. ${accountsCount} accounts are using this type. Please reassign or delete those accounts first.`
       });
     }
 
-    await CategoryType.findByIdAndDelete(req.params.id);
+    await CategoryType.deleteOne({ _id: type._id });
     res.json({ message: 'Category type deleted successfully' });
   } catch (error) {
     console.error('Error deleting category type:', error);

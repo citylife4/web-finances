@@ -1,5 +1,5 @@
 <template>
-  <div class="monthly-entry">
+  <div class="monthly-entry page">
     <div class="page-header">
       <h2>Monthly Entry</h2>
       <p class="subtitle">Record your account balances for this month</p>
@@ -13,7 +13,7 @@
     </div>
 
     <div v-else-if="store.accounts.length === 0" class="no-accounts-warning">
-      <div class="warning-card">
+      <div class="warning-card panel">
         <h3>⚠️ No Accounts Found</h3>
         <p>You need to add some accounts before you can record monthly entries.</p>
         <router-link to="/accounts" class="btn btn-primary">Add Accounts</router-link>
@@ -22,7 +22,7 @@
 
     <div v-else class="entry-form-container">
       <!-- Month Selection -->
-      <div class="month-selection">
+      <div class="month-selection panel">
         <h3>Select Month</h3>
         <div class="month-inputs">
           <input
@@ -41,7 +41,7 @@
       </div>
 
       <!-- Entry Form -->
-      <div class="entry-forms">
+      <div class="entry-forms panel">
         <h3>Account Balances for {{ formatSelectedMonth }}</h3>
         
         <!-- Dynamic Account Type Sections -->
@@ -122,8 +122,8 @@
 
 <script>
 import { ref, computed, watch, onMounted } from 'vue'
-import { store } from '../store/api-store'
-import { format } from 'date-fns'
+import { store, idOf } from '../store/api-store'
+import { formatCurrency, formatMonth } from '../utils/format'
 
 export default {
   name: 'MonthlyEntry',
@@ -144,10 +144,7 @@ export default {
         if (type && type._id) {
           grouped[type._id] = {
             type: type,
-            accounts: (store.accounts || []).filter(acc => {
-              const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
-              return accTypeId === type._id
-            })
+            accounts: (store.accounts || []).filter(acc => idOf(acc.typeId) === type._id)
           }
         }
       })
@@ -156,34 +153,40 @@ export default {
 
     const formatSelectedMonth = computed(() => {
       if (!selectedMonth.value) return ''
-      return format(new Date(selectedMonth.value + '-01'), 'MMMM yyyy')
+      return formatMonth(selectedMonth.value)
     })
 
     // Calculate totals by type
+    // An input counts as filled in when it holds any number (0 and negatives
+    // are valid balances - think credit cards or loans)
+    const isFilled = (value) => value !== '' && value !== null && value !== undefined && !isNaN(Number(value))
+
     const getTotalByType = (typeId) => {
       const group = accountsByType.value[typeId]
       if (!group) return 0
       return group.accounts.reduce((total, account) => {
-        return total + (accountValues.value[account._id] || 0)
+        const value = accountValues.value[account._id]
+        return total + (isFilled(value) ? Number(value) : 0)
       }, 0)
     }
 
     const totalNetWorthEntry = computed(() => {
       if (!store.accounts || store.accounts.length === 0) return 0
       return store.accounts.reduce((total, account) => {
-        return total + (accountValues.value[account._id] || 0)
+        const value = accountValues.value[account._id]
+        return total + (isFilled(value) ? Number(value) : 0)
       }, 0)
     })
 
     const hasAnyValue = computed(() => {
-      return Object.values(accountValues.value).some(value => value && value > 0)
+      return Object.values(accountValues.value).some(isFilled)
     })
 
     const initializeAccountValues = () => {
       const values = {}
       if (store.accounts && store.accounts.length > 0) {
         store.accounts.forEach(account => {
-          values[account._id] = 0
+          values[account._id] = ''
         })
       }
       accountValues.value = values
@@ -197,8 +200,7 @@ export default {
       try {
         const existingEntries = await store.loadEntriesByMonth(selectedMonth.value)
         existingEntries.forEach(entry => {
-          const accountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-          accountValues.value[accountId] = entry.amount
+          accountValues.value[idOf(entry.accountId)] = entry.amount
         })
       } catch (error) {
         console.error('Failed to load existing entries:', error)
@@ -207,12 +209,9 @@ export default {
 
     const getPreviousValue = (accountId) => {
       const entries = store.monthlyEntries
-        .filter(entry => {
-          const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-          return entryAccountId === accountId && entry.month < selectedMonth.value
-        })
+        .filter(entry => idOf(entry.accountId) === accountId && entry.month < selectedMonth.value)
         .sort((a, b) => new Date(b.month) - new Date(a.month))
-      
+
       return entries.length > 0 ? entries[0].amount : null
     }
 
@@ -220,13 +219,13 @@ export default {
       if (!selectedMonth.value || !hasAnyValue.value) return
 
       try {
-        // Prepare entries for API
+        // Prepare entries for API - only accounts with a value entered
         const entries = Object.entries(accountValues.value)
-          .filter(([accountId, amount]) => amount && amount > 0)
+          .filter(([, amount]) => isFilled(amount))
           .map(([accountId, amount]) => ({
             accountId,
             month: selectedMonth.value,
-            amount: parseFloat(amount)
+            amount: Number(amount)
           }))
 
         await store.saveMonthlyEntries(entries)
@@ -244,10 +243,6 @@ export default {
 
     const clearForm = () => {
       initializeAccountValues()
-    }
-
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
     }
 
     // Watch for month changes to load existing entries
@@ -294,38 +289,7 @@ export default {
 </script>
 
 <style scoped>
-.monthly-entry {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 2.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.subtitle {
-  color: #666;
-  margin-top: 0.5rem;
-}
-
-.no-accounts-warning {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 300px;
-}
-
+.no-accounts-warning,
 .loading-state {
   display: flex;
   justify-content: center;
@@ -334,10 +298,10 @@ export default {
 }
 
 .loading-card {
-  background: white;
-  border-radius: 15px;
-  padding: 3rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -346,262 +310,200 @@ export default {
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.9s linear infinite;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
 .warning-card {
-  background: white;
-  border-radius: 15px;
-  padding: 3rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
   text-align: center;
   max-width: 400px;
 }
 
 .warning-card h3 {
-  margin-top: 0;
-  color: #f39c12;
+  color: #b45309;
 }
 
 .entry-form-container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-}
-
-.month-selection {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.month-selection h3 {
-  margin-top: 0;
-  margin-bottom: 1rem;
-  color: #333;
+  gap: 1.5rem;
 }
 
 .month-inputs {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
   margin-bottom: 0.5rem;
 }
 
 .month-input {
-  padding: 0.75rem;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: inherit;
   min-width: 200px;
 }
 
 .month-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(91, 110, 232, 0.15);
 }
 
 .month-help {
-  color: #666;
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
   margin: 0;
 }
 
-.entry-forms {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.entry-forms h3 {
-  margin-top: 0;
-  margin-bottom: 2rem;
-  color: #333;
-}
-
 .account-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .section-title {
-  margin: 0 0 1rem 0;
-  padding: 0.75rem 1rem;
-  padding-left: 1.5rem;
-  border-radius: 8px;
-  border-left: 4px solid;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 1.1rem;
+  margin: 0 0 0.85rem 0;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .accounts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
 }
 
 .account-entry {
-  padding: 1.5rem;
-  border-radius: 10px;
-  border-left: 4px solid;
-  background: #f8f9fa;
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface);
 }
 
 .account-info {
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .account-info h5 {
-  margin: 0 0 0.25rem 0;
-  color: #333;
-  font-size: 1.1rem;
+  margin: 0 0 0.2rem 0;
+  color: var(--color-text);
+  font-size: 1rem;
 }
 
 .account-category {
   margin: 0;
-  color: #666;
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 .amount-input {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
 }
 
 .amount-input label {
   font-weight: 600;
-  color: #333;
-  font-size: 0.9rem;
+  color: var(--color-text);
+  font-size: 0.85rem;
 }
 
 .amount-input input {
-  padding: 0.75rem;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: inherit;
 }
 
 .amount-input input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(91, 110, 232, 0.15);
 }
 
 .previous-value {
-  color: #666;
+  color: var(--color-text-soft);
   font-size: 0.8rem;
   font-style: italic;
 }
 
 .entry-summary {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 10px;
-  padding: 1.5rem;
-  margin: 2rem 0;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin: 1.5rem 0;
 }
 
 .entry-summary h4 {
   margin-top: 0;
   margin-bottom: 1rem;
-  color: #333;
+  color: var(--color-text);
 }
 
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .summary-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  border-radius: 8px;
-  background: white;
-  border-left: 4px solid #667eea;
-}
-
-.summary-item.total {
-  border-left-color: #667eea;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
 }
 
 .summary-item .label {
   font-weight: 600;
-  color: #333;
+  font-size: 0.9rem;
+  color: var(--color-text);
 }
 
 .summary-item .value {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #28a745;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-success);
 }
 
 .form-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: flex-end;
-  margin-top: 2rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #5a6268;
+  margin-top: 1.5rem;
 }
 
 .success-message {
   position: fixed;
-  top: 2rem;
-  right: 2rem;
-  background: #28a745;
+  top: 4.5rem;
+  right: 1.5rem;
+  background: var(--color-success);
   color: white;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+  padding: 0.85rem 1.25rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   z-index: 1000;
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn 0.25s ease-out;
 }
 
 @keyframes slideIn {
@@ -616,27 +518,19 @@ export default {
 }
 
 @media (max-width: 768px) {
-  .monthly-entry {
-    padding: 1rem;
-  }
-  
-  .page-header h2 {
-    font-size: 2rem;
-  }
-  
   .accounts-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .month-inputs {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .form-actions {
     flex-direction: column;
   }
-  
+
   .summary-grid {
     grid-template-columns: 1fr;
   }

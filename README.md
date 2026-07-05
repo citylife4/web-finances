@@ -168,16 +168,31 @@ For detailed Docker documentation, see [DOCKER.md](./DOCKER.md).
 ```
 ├── src/                    # Frontend Vue.js application
 ├── backend/               # Express.js API server
-│   ├── models/           # MongoDB models
-│   ├── routes/           # API routes
-│   └── server.js         # Main server file
+│   └── src/
+│       ├── models/       # MongoDB models
+│       ├── routes/       # API routes
+│       ├── middleware/   # Auth middleware
+│       ├── config.js     # Environment configuration
+│       └── server.js     # Main server file
 ├── docker-compose.yml    # Production Docker config
 ├── docker-compose.dev.yml # Development Docker config
 └── Makefile             # Docker management commands
 ```
 
 ### Environment Variables
-See `backend/.env.development` and `backend/.env.production` for configuration options.
+Copy `backend/.env.example` to `backend/.env` and adjust the values. In production
+the server refuses to start unless `JWT_SECRET` and `JWT_REFRESH_SECRET` are set.
+
+### Upgrading from a pre-multi-user version
+Data is now scoped per user. If you have existing data created before user
+accounts were enforced, assign it to your user once:
+
+```bash
+cd backend
+MIGRATE_USER_EMAIL=you@example.com node src/migrate-add-user-scope.js
+```
+
+(With exactly one registered user the email variable can be omitted.)
 
 ## 🤝 Contributing
 

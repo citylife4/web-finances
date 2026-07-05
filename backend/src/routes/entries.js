@@ -7,14 +7,15 @@ const { authenticate } = require('../middleware/auth');
 // Apply authentication to all routes
 router.use(authenticate);
 
-// GET /api/entries - Get all monthly entries
+// GET /api/entries - Get all monthly entries for the user
 router.get('/', async (req, res) => {
   try {
-    const entries = await MonthlyEntry.find()
-      .populate('accountId', 'name type category')
+    const entries = await MonthlyEntry.find({ userId: req.userId })
+      .populate('accountId', 'name type categoryId')
       .sort({ month: -1, createdAt: -1 });
     res.json(entries);
   } catch (error) {
+    console.error('Error fetching entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -23,16 +24,17 @@ router.get('/', async (req, res) => {
 router.get('/month/:month', async (req, res) => {
   try {
     const { month } = req.params;
-    
+
     if (!/^\d{4}-\d{2}$/.test(month)) {
       return res.status(400).json({ error: 'Invalid month format. Use YYYY-MM' });
     }
-    
-    const entries = await MonthlyEntry.find({ month })
-      .populate('accountId', 'name type category')
+
+    const entries = await MonthlyEntry.find({ userId: req.userId, month })
+      .populate('accountId', 'name type categoryId')
       .sort({ createdAt: -1 });
     res.json(entries);
   } catch (error) {
+    console.error('Error fetching entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries' });
   }
 });
@@ -72,14 +74,15 @@ router.post('/', async (req, res) => {
       accountIds.add(accountId);
     }
 
-    // Batch fetch all accounts at once (fixes N+1 query problem)
-    const accounts = await Account.find({ 
-      _id: { $in: Array.from(accountIds) } 
+    // Batch fetch all accounts at once, scoped to the user
+    const accounts = await Account.find({
+      _id: { $in: Array.from(accountIds) },
+      userId: req.userId
     }).select('_id name');
-    
+
     const accountMap = new Map(accounts.map(acc => [acc._id.toString(), acc]));
 
-    // Verify all accounts exist
+    // Verify all accounts exist and belong to the user
     for (const accountId of accountIds) {
       if (!accountMap.has(accountId)) {
         return res.status(400).json({ error: `Account ${accountId} not found` });
@@ -90,12 +93,14 @@ router.post('/', async (req, res) => {
     const bulkOps = entries.map(({ accountId, month, amount }) => ({
       updateOne: {
         filter: { accountId, month },
-        update: { $set: { amount: Number(amount) } },
+        update: {
+          $set: { amount: Number(amount) },
+          $setOnInsert: { userId: req.userId }
+        },
         upsert: true
       }
     }));
 
-    // Execute bulk operation
     await MonthlyEntry.bulkWrite(bulkOps);
 
     // Fetch and return the updated entries
@@ -116,29 +121,30 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { amount } = req.body;
-    
+
     if (amount === undefined || amount === null) {
       return res.status(400).json({ error: 'Amount is required' });
     }
-    
+
     const numAmount = Number(amount);
     if (isNaN(numAmount)) {
       return res.status(400).json({ error: 'Amount must be a valid number' });
     }
     // Allow negative amounts for credit cards, loans, debts, etc.
-    
-    const entry = await MonthlyEntry.findByIdAndUpdate(
-      req.params.id,
+
+    const entry = await MonthlyEntry.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       { amount: numAmount },
       { new: true, runValidators: true }
-    ).populate('accountId', 'name type category');
-    
+    ).populate('accountId', 'name type categoryId');
+
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
     }
-    
+
     res.json(entry);
   } catch (error) {
+    console.error('Error updating entry:', error);
     res.status(500).json({ error: 'Failed to update entry' });
   }
 });
@@ -146,14 +152,15 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/entries/:id - Delete a monthly entry
 router.delete('/:id', async (req, res) => {
   try {
-    const entry = await MonthlyEntry.findByIdAndDelete(req.params.id);
-    
+    const entry = await MonthlyEntry.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+
     if (!entry) {
       return res.status(404).json({ error: 'Entry not found' });
     }
-    
+
     res.json({ message: 'Entry deleted successfully' });
   } catch (error) {
+    console.error('Error deleting entry:', error);
     res.status(500).json({ error: 'Failed to delete entry' });
   }
 });
@@ -161,12 +168,10 @@ router.delete('/:id', async (req, res) => {
 // GET /api/entries/analytics/totals - Get monthly totals for analytics
 router.get('/analytics/totals', async (req, res) => {
   try {
-    const { CategoryType } = require('../models');
-    
-    // Get all category types for dynamic grouping
-    const categoryTypes = await CategoryType.find();
-    
     const pipeline = [
+      {
+        $match: { userId: new mongoose.Types.ObjectId(req.userId) }
+      },
       {
         $lookup: {
           from: 'accounts',
@@ -223,7 +228,7 @@ router.get('/analytics/totals', async (req, res) => {
         $sort: { month: 1 }
       }
     ];
-    
+
     const totals = await MonthlyEntry.aggregate(pipeline);
     res.json(totals);
   } catch (error) {

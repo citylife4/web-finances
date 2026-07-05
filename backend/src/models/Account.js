@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const accountSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   name: {
     type: String,
     required: true,
@@ -30,7 +35,7 @@ const accountSchema = new mongoose.Schema({
 });
 
 // Index for performance
-accountSchema.index({ typeId: 1 });
-accountSchema.index({ categoryId: 1 });
+accountSchema.index({ userId: 1, typeId: 1 });
+accountSchema.index({ userId: 1, categoryId: 1 });
 
 module.exports = mongoose.model('Account', accountSchema);

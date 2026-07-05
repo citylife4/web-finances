@@ -1,17 +1,17 @@
 <template>
-  <div class="dashboard">
-    <div class="dashboard-header">
+  <div class="dashboard page">
+    <div class="page-header">
       <h2>Financial Dashboard</h2>
       <p class="subtitle">Track your wealth progression over time</p>
     </div>
 
     <!-- Loading State -->
-    <div v-if="store.loading" class="loading-state">
+    <div v-if="store.loading" class="panel empty-state">
       <p>Loading your financial data...</p>
     </div>
 
     <!-- Error State -->
-    <div v-if="store.error" class="error-state">
+    <div v-if="store.error" class="panel error-state">
       <p>⚠️ {{ store.error }}</p>
       <button @click="store.initialize()" class="btn btn-primary">Retry</button>
     </div>
@@ -47,24 +47,24 @@
 
     <!-- Charts Section -->
     <div class="charts-section">
-      <div class="chart-container">
+      <div class="chart-container panel">
         <h3>Wealth Progression Over Time</h3>
         <canvas ref="progressionChart"></canvas>
       </div>
-      
-      <div class="chart-container">
+
+      <div class="chart-container panel">
         <h3>Assets Breakdown</h3>
         <canvas ref="breakdownChart"></canvas>
       </div>
 
-      <div class="chart-container" v-if="categoryBreakdown.length > 0">
+      <div class="chart-container panel" v-if="categoryBreakdown.length > 0">
         <h3>Category Breakdown</h3>
         <canvas ref="categoryChart"></canvas>
       </div>
     </div>
 
     <!-- Category Insights -->
-    <div v-if="categoryInsights.length > 0" class="category-insights">
+    <div v-if="categoryInsights.length > 0" class="category-insights panel">
       <h3>Category Analysis</h3>
       <div class="insights-grid">
         <div 
@@ -90,9 +90,9 @@
     </div>
 
     <!-- Recent Entries -->
-    <div class="recent-entries">
+    <div class="recent-entries panel">
       <h3>Recent Entries</h3>
-      <div v-if="recentEntries.length === 0" class="no-data">
+      <div v-if="recentEntries.length === 0" class="empty-state">
         No entries yet. <router-link to="/entry">Add your first entry</router-link>
       </div>
       <div v-else class="entries-list">
@@ -114,8 +114,8 @@
 <script>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Chart, registerables } from 'chart.js'
-import { store } from '../store/api-store'
-import { format } from 'date-fns'
+import { store, idOf } from '../store/api-store'
+import { formatCurrency, formatMonth, formatMonthShort } from '../utils/format'
 
 Chart.register(...registerables)
 
@@ -145,38 +145,21 @@ export default {
       }
     }
 
-    const getTotalByTypeId = (typeId) => {
-      try {
-        return store.accounts
-          .filter(acc => {
-            const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
-            return accTypeId === typeId
-          })
-          .reduce((total, account) => {
-            const latestEntry = store.monthlyEntries
-              .filter(entry => {
-                const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-                return entryAccountId === account._id
-              })
-              .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
-            return total + (latestEntry ? latestEntry.amount : 0)
-          }, 0)
-      } catch (error) {
-        console.error('Error calculating total for type:', error)
-        return 0
-      }
+    const getLatestAmount = (accountId) => {
+      const latestEntry = store.monthlyEntries
+        .filter(entry => idOf(entry.accountId) === accountId)
+        .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
+      return latestEntry ? latestEntry.amount : 0
     }
-    
+
+    const getTotalByTypeId = (typeId) => {
+      return store.accounts
+        .filter(acc => idOf(acc.typeId) === typeId)
+        .reduce((total, account) => total + getLatestAmount(account._id), 0)
+    }
+
     const totalNetWorth = computed(() => {
-      return store.accounts.reduce((total, account) => {
-        const latestEntry = store.monthlyEntries
-          .filter(entry => {
-            const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-            return entryAccountId === account._id
-          })
-          .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
-        return total + (latestEntry ? latestEntry.amount : 0)
-      }, 0)
+      return store.accounts.reduce((total, account) => total + getLatestAmount(account._id), 0)
     })
 
     const recentEntries = computed(() => 
@@ -209,16 +192,9 @@ export default {
       // Calculate totals for each category
       Object.values(categoryGroups).forEach(group => {
         group.accounts.forEach(account => {
-          const latestEntry = store.monthlyEntries
-            .filter(entry => {
-              const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-              return entryAccountId === account._id
-            })
-            .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
-          
-          group.total += latestEntry ? latestEntry.amount : 0
+          group.total += getLatestAmount(account._id)
         })
-        
+
         if (group.total > 0) {
           breakdown.push({
             name: group.category.name,
@@ -237,7 +213,7 @@ export default {
       
       // Add insights for categories
       categoryBreakdown.value.forEach(item => {
-        const typeId = typeof item.typeId === 'string' ? item.typeId : item.typeId?._id
+        const typeId = idOf(item.typeId)
         const categoryType = store.categoryTypes.find(t => t._id === typeId)
         const parentTotal = getTotalByTypeId(typeId)
         const percentage = parentTotal > 0 ? ((item.total / parentTotal) * 100).toFixed(1) : 0
@@ -254,23 +230,10 @@ export default {
       return insights.sort((a, b) => b.total - a.total)
     })
 
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
-    }
-
-    const formatMonth = (monthString) => {
-      return format(new Date(monthString + '-01'), 'MMMM yyyy')
-    }
-
     const getAccountName = (entry) => {
-      // Handle both old localStorage format and new API format
-      if (typeof entry.accountId === 'string') {
-        const account = store.accounts.find(acc => acc._id === entry.accountId)
-        return account ? account.name : 'Unknown Account'
-      } else if (entry.accountId && entry.accountId.name) {
-        return entry.accountId.name
-      }
-      return 'Unknown Account'
+      if (entry.accountId?.name) return entry.accountId.name
+      const account = store.accounts.find(acc => acc._id === idOf(entry.accountId))
+      return account ? account.name : 'Unknown Account'
     }
 
     const createProgressionChart = async () => {
@@ -318,7 +281,7 @@ export default {
         progressionChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
-          labels: monthlyTotals.map(data => format(new Date(data.month + '-01'), 'MMM yyyy')),
+          labels: monthlyTotals.map(data => formatMonthShort(data.month)),
           datasets
         },
         options: {
@@ -332,9 +295,7 @@ export default {
             y: {
               beginAtZero: true,
               ticks: {
-                callback: function(value) {
-                  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(value)
-                }
+                callback: (value) => formatCurrency(value)
               }
             }
           },
@@ -344,9 +305,7 @@ export default {
               position: 'nearest',
               yAlign: 'bottom',
               callbacks: {
-                label: function(context) {
-                  return context.dataset.label + ': ' + new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed.y)
-                }
+                label: (context) => context.dataset.label + ': ' + formatCurrency(context.parsed.y)
               }
             }
           }
@@ -389,7 +348,7 @@ export default {
               callbacks: {
                 label: function(context) {
                   const percentage = ((context.parsed / totalNetWorth.value) * 100).toFixed(1)
-                  return context.label + ': ' + new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed) + ' (' + percentage + '%)'
+                  return context.label + ': ' + formatCurrency(context.parsed) + ' (' + percentage + '%)'
                 }
               }
             }
@@ -434,11 +393,11 @@ export default {
               callbacks: {
                 label: function(context) {
                   const item = categoryBreakdown.value[context.dataIndex]
-                  const typeId = typeof item.typeId === 'string' ? item.typeId : item.typeId?._id
+                  const typeId = idOf(item.typeId)
                   const categoryType = store.categoryTypes.find(t => t._id === typeId)
                   const parentTotal = getTotalByTypeId(typeId)
                   const percentage = parentTotal > 0 ? ((context.parsed / parentTotal) * 100).toFixed(1) : 0
-                  return `${context.label}: ${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(context.parsed)} (${percentage}% of ${categoryType?.displayName || 'Unknown'})`
+                  return `${context.label}: ${formatCurrency(context.parsed)} (${percentage}% of ${categoryType?.displayName || 'Unknown'})`
                 }
               }
             },
@@ -496,205 +455,123 @@ export default {
 </script>
 
 <style scoped>
-.dashboard {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.dashboard-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.dashboard-header h2 {
-  margin: 0;
-  font-size: 2.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.subtitle {
-  color: #666;
-  margin-top: 0.5rem;
-}
-
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-bottom: 3rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .card {
-  background: white;
-  border-radius: 15px;
-  border-top: 5px solid #667eea;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  transition: transform 0.3s;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 4px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .card:hover {
-  transform: translateY(-5px);
-}
-
-.card.total {
-  border-top-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .card-header h3 {
-  margin: 0 0 1rem 0;
-  color: #333;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
 }
 
 .card-amount {
-  font-size: 2.5rem;
-  font-weight: bold;
-  color: #333;
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
 }
 
 .charts-section {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 2rem;
-  margin-bottom: 3rem;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .chart-container {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem 2rem 3rem 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  min-height: 450px;
+  min-height: 430px;
   position: relative;
-}
-
-.chart-container h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  color: #333;
+  /* allow grid tracks to shrink below the canvas' intrinsic size */
+  min-width: 0;
 }
 
 .chart-container canvas {
-  max-height: 350px !important;
-  height: 350px !important;
-}
-
-.recent-entries {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.recent-entries h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  color: #333;
-}
-
-.no-data {
-  text-align: center;
-  color: #666;
-  padding: 2rem;
+  max-height: 340px !important;
+  height: 340px !important;
+  max-width: 100% !important;
 }
 
 .entries-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 .entry-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
 }
 
 .entry-info {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.15rem;
 }
 
 .entry-month {
-  color: #666;
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 .entry-amount {
-  font-weight: bold;
-  font-size: 1.1rem;
-  color: #333;
+  font-weight: 700;
+  color: var(--color-text);
 }
 
-.loading-state,
 .error-state {
   text-align: center;
-  padding: 3rem 2rem;
-  background: white;
-  border-radius: 15px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 2rem;
-}
-
-.loading-state p {
-  font-size: 1.2rem;
-  color: #666;
+  margin-bottom: 1.5rem;
 }
 
 .error-state p {
-  font-size: 1.1rem;
-  color: #dc3545;
+  color: var(--color-danger);
   margin-bottom: 1rem;
 }
 
 /* Category Insights */
 .category-insights {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 3rem;
-}
-
-.category-insights h3 {
-  margin-top: 0;
   margin-bottom: 1.5rem;
-  color: #333;
 }
 
 .insights-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
 }
 
 .insight-card {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 10px;
-  padding: 1.5rem;
-  border-left: 4px solid;
-  transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.insight-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-
-.insight-card:nth-child(4n+1) {
-  border-left-color: #667eea;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  border-left: 4px solid var(--color-primary);
 }
 
 .insight-card:nth-child(4n+2) {
-  border-left-color: #f093fb;
+  border-left-color: #b473d6;
 }
 
 .insight-card:nth-child(4n+3) {
@@ -702,47 +579,49 @@ export default {
 }
 
 .insight-card:nth-child(4n+4) {
-  border-left-color: #43e97b;
+  border-left-color: #34c98e;
 }
 
 .insight-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .insight-header h4 {
   margin: 0;
-  color: #333;
-  font-size: 1.1rem;
+  color: var(--color-text);
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .parent-type {
-  background: rgba(102, 126, 234, 0.1);
-  color: #667eea;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
+  background: rgba(91, 110, 232, 0.1);
+  color: var(--color-primary-dark);
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .insight-amount {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 0.5rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.35rem;
 }
 
 .insight-percentage {
-  color: #666;
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
 }
 
 .insight-accounts {
-  color: #888;
+  color: var(--color-text-soft);
   font-size: 0.8rem;
 }
 
@@ -750,19 +629,11 @@ export default {
   .charts-section {
     grid-template-columns: 1fr;
   }
-  
+
   .summary-cards {
     grid-template-columns: 1fr;
   }
-  
-  .dashboard {
-    padding: 1rem;
-  }
-  
-  .dashboard-header h2 {
-    font-size: 2rem;
-  }
-  
+
   .insights-grid {
     grid-template-columns: 1fr;
   }

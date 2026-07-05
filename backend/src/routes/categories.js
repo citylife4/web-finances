@@ -6,14 +6,21 @@ const { authenticate } = require('../middleware/auth');
 // Apply authentication to all routes
 router.use(authenticate);
 
-// GET /api/categories - Get all categories with type population
+// A category type is visible to a user if it's a system type or their own
+const visibleTypeFilter = (userId, extra = {}) => ({
+  ...extra,
+  $or: [{ isSystem: true }, { userId }]
+});
+
+// GET /api/categories - Get the user's categories with type population
 router.get('/', async (req, res) => {
   try {
-    const categories = await Category.find()
+    const categories = await Category.find({ userId: req.userId })
       .populate('typeId', 'name displayName color')
       .sort({ typeId: 1, name: 1 });
     res.json(categories);
   } catch (error) {
+    console.error('Error fetching categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
@@ -22,18 +29,18 @@ router.get('/', async (req, res) => {
 router.get('/type/:typeId', async (req, res) => {
   try {
     const { typeId } = req.params;
-    
-    // Verify the type exists
-    const categoryType = await CategoryType.findById(typeId);
+
+    const categoryType = await CategoryType.findOne(visibleTypeFilter(req.userId, { _id: typeId }));
     if (!categoryType) {
       return res.status(404).json({ error: 'Category type not found' });
     }
-    
-    const categories = await Category.find({ typeId })
+
+    const categories = await Category.find({ userId: req.userId, typeId })
       .populate('typeId', 'name displayName color')
       .sort({ name: 1 });
     res.json(categories);
   } catch (error) {
+    console.error('Error fetching categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
@@ -42,18 +49,20 @@ router.get('/type/:typeId', async (req, res) => {
 router.get('/by-name/:typeName', async (req, res) => {
   try {
     const { typeName } = req.params;
-    
-    // Find the type by name
-    const categoryType = await CategoryType.findOne({ name: typeName.toLowerCase() });
+
+    const categoryType = await CategoryType.findOne(
+      visibleTypeFilter(req.userId, { name: typeName.toLowerCase() })
+    );
     if (!categoryType) {
       return res.status(404).json({ error: 'Category type not found' });
     }
-    
-    const categories = await Category.find({ typeId: categoryType._id })
+
+    const categories = await Category.find({ userId: req.userId, typeId: categoryType._id })
       .populate('typeId', 'name displayName color')
       .sort({ name: 1 });
     res.json(categories);
   } catch (error) {
+    console.error('Error fetching categories:', error);
     res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
@@ -62,24 +71,24 @@ router.get('/by-name/:typeName', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { name, typeId, description } = req.body;
-    
+
     if (!name || !typeId) {
       return res.status(400).json({ error: 'Name and typeId are required' });
     }
-    
-    // Verify the type exists
-    const categoryType = await CategoryType.findById(typeId);
+
+    const categoryType = await CategoryType.findOne(visibleTypeFilter(req.userId, { _id: typeId }));
     if (!categoryType) {
       return res.status(400).json({ error: 'Invalid category type' });
     }
-    
+
     const category = new Category({
+      userId: req.userId,
       name: name.trim(),
       typeId,
       type: categoryType.name, // Keep for backward compatibility
       description: description?.trim()
     });
-    
+
     const savedCategory = await category.save();
     await savedCategory.populate('typeId', 'name displayName color');
     res.status(201).json(savedCategory);
@@ -89,6 +98,7 @@ router.post('/', async (req, res) => {
     } else if (error.name === 'ValidationError') {
       res.status(400).json({ error: error.message });
     } else {
+      console.error('Error creating category:', error);
       res.status(500).json({ error: 'Failed to create category' });
     }
   }
@@ -105,7 +115,7 @@ router.put('/:id', async (req, res) => {
 
     // If typeId is being changed, verify it exists and update the type field
     if (typeId) {
-      const categoryType = await CategoryType.findById(typeId);
+      const categoryType = await CategoryType.findOne(visibleTypeFilter(req.userId, { _id: typeId }));
       if (!categoryType) {
         return res.status(400).json({ error: 'Invalid category type' });
       }
@@ -113,8 +123,8 @@ router.put('/:id', async (req, res) => {
       updateData.type = categoryType.name; // Keep for backward compatibility
     }
 
-    const category = await Category.findByIdAndUpdate(
-      req.params.id,
+    const category = await Category.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId },
       updateData,
       { new: true, runValidators: true }
     ).populate('typeId', 'name displayName color');
@@ -126,7 +136,7 @@ router.put('/:id', async (req, res) => {
     // If typeId was changed, cascade the update to all accounts using this category
     if (typeId) {
       await Account.updateMany(
-        { categoryId: req.params.id },
+        { categoryId: req.params.id, userId: req.userId },
         { typeId: typeId }
       );
     }
@@ -138,6 +148,7 @@ router.put('/:id', async (req, res) => {
     } else if (error.name === 'ValidationError') {
       res.status(400).json({ error: error.message });
     } else {
+      console.error('Error updating category:', error);
       res.status(500).json({ error: 'Failed to update category' });
     }
   }
@@ -147,22 +158,26 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     // Check if any accounts use this category
-    const accountCount = await Account.countDocuments({ categoryId: req.params.id });
-    
+    const accountCount = await Account.countDocuments({
+      categoryId: req.params.id,
+      userId: req.userId
+    });
+
     if (accountCount > 0) {
-      return res.status(409).json({ 
-        error: `Cannot delete category: ${accountCount} account(s) are using this category. Please reassign or delete those accounts first.` 
+      return res.status(409).json({
+        error: `Cannot delete category: ${accountCount} account(s) are using this category. Please reassign or delete those accounts first.`
       });
     }
-    
-    const category = await Category.findByIdAndDelete(req.params.id);
-    
+
+    const category = await Category.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+
     if (!category) {
       return res.status(404).json({ error: 'Category not found' });
     }
-    
+
     res.json({ message: 'Category deleted successfully' });
   } catch (error) {
+    console.error('Error deleting category:', error);
     res.status(500).json({ error: 'Failed to delete category' });
   }
 });

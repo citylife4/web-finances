@@ -1,12 +1,12 @@
 <template>
-  <div class="account-manager">
+  <div class="account-manager page">
     <div class="page-header">
       <h2>Manage Accounts</h2>
       <p class="subtitle">Add and organize your deposit and investment accounts</p>
     </div>
 
     <!-- Add Account Form -->
-    <div class="add-account-section">
+    <div class="add-account-section panel">
       <h3>Add New Account</h3>
       <form @submit.prevent="addAccount" class="account-form">
         <div class="form-row">
@@ -79,10 +79,10 @@
     </div>
 
     <!-- Accounts List -->
-    <div class="accounts-section">
+    <div class="accounts-section panel">
       <h3>Your Accounts</h3>
-      
-      <div v-if="store.accounts.length === 0" class="no-accounts">
+
+      <div v-if="store.accounts.length === 0" class="empty-state">
         <p>No accounts added yet. Create your first account above!</p>
       </div>
       
@@ -193,7 +193,8 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import { store } from '../store/api-store'
+import { store, idOf } from '../store/api-store'
+import { formatCurrency } from '../utils/format'
 
 export default {
   name: 'AccountManager',
@@ -213,7 +214,8 @@ export default {
         await Promise.all([
           store.loadCategoryTypes(),
           store.loadAccounts(),
-          store.loadCategories()
+          store.loadCategories(),
+          store.loadEntries()
         ])
       } catch (error) {
         console.error('Failed to load data:', error)
@@ -231,18 +233,13 @@ export default {
     })
 
     const getAccountsByType = (typeId) => {
-      return store.accounts.filter(acc => {
-        const accTypeId = typeof acc.typeId === 'string' ? acc.typeId : acc.typeId?._id
-        return accTypeId === typeId
-      })
+      return store.accounts.filter(acc => idOf(acc.typeId) === typeId)
     }
 
     const addAccount = async () => {
       try {
-        console.log('Adding account:', newAccount.value)
         await store.addAccount({ ...newAccount.value })
-        console.log('Account added successfully')
-        
+
         // Reset form
         newAccount.value = {
           name: '',
@@ -296,14 +293,10 @@ export default {
 
     const getLatestValue = (accountId) => {
       const entries = store.monthlyEntries
-        .filter(entry => entry.accountId._id === accountId)
+        .filter(entry => idOf(entry.accountId) === accountId)
         .sort((a, b) => new Date(b.month) - new Date(a.month))
-      
-      return entries.length > 0 ? entries[0].amount : 0
-    }
 
-    const formatCurrency = (amount) => {
-      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0 }).format(amount)
+      return entries.length > 0 ? entries[0].amount : 0
     }
 
     return {
@@ -326,288 +319,137 @@ export default {
 </script>
 
 <style scoped>
-.account-manager {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 2.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.subtitle {
-  color: #666;
-  margin-top: 0.5rem;
-}
-
-.add-account-section {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 3rem;
-}
-
-.add-account-section h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  color: #333;
-}
-
 .account-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.account-form .btn {
+  align-self: flex-start;
 }
 
-.form-group label {
-  font-weight: 600;
-  color: #333;
-}
-
-.form-group input,
-.form-group select {
-  padding: 0.75rem;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #5a6268;
-}
-
-.accounts-section {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-.accounts-section h3 {
-  margin-top: 0;
+.add-account-section {
   margin-bottom: 1.5rem;
-  color: #333;
-}
-
-.no-accounts {
-  text-align: center;
-  color: #666;
-  padding: 2rem;
 }
 
 .accounts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+  gap: 1.5rem;
 }
 
 .account-type-section {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .section-title {
   margin: 0;
-  padding: 0.75rem 1rem;
-  padding-left: 1.5rem;
-  border-radius: 8px;
-  border-left: 4px solid;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 1.2rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .accounts-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .account-card {
-  padding: 1.5rem;
-  border-radius: 10px;
-  border-left: 4px solid;
-  background: #f8f9fa;
-  transition: transform 0.3s;
+  padding: 1.1rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface);
+  transition: box-shadow 0.15s ease;
 }
 
 .account-card:hover {
-  transform: translateX(5px);
+  box-shadow: var(--shadow-md);
 }
 
 .account-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .account-header h5 {
   margin: 0;
-  color: #333;
-  font-size: 1.1rem;
+  color: var(--color-text);
+  font-size: 1rem;
 }
 
 .account-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.35rem;
 }
 
 .btn-icon {
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   padding: 0.25rem;
-  border-radius: 4px;
-  transition: background-color 0.3s;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
 }
 
 .btn-icon:hover {
-  background-color: rgba(0,0,0,0.1);
+  background-color: rgba(0, 0, 0, 0.07);
 }
 
 .btn-icon.delete:hover {
-  background-color: rgba(220, 53, 69, 0.1);
+  background-color: var(--color-danger-bg);
 }
 
 .account-category {
-  margin: 0.5rem 0;
-  color: #666;
+  margin: 0.3rem 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
   font-weight: 500;
 }
 
-.account-subcategory {
-  margin: 0.25rem 0 0.5rem 0;
-  color: #888;
-  font-size: 0.9rem;
-}
-
 .account-description {
-  margin: 0.5rem 0;
-  color: #888;
+  margin: 0.3rem 0;
+  color: var(--color-text-soft);
+  font-size: 0.9rem;
   font-style: italic;
 }
 
 .account-stats {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #dee2e6;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
 }
 
 .latest-value {
   font-weight: 600;
-  color: #28a745;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  color: #333;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 2rem;
+  font-size: 0.92rem;
+  color: var(--color-success);
 }
 
 @media (max-width: 768px) {
   .accounts-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
-  }
-  
-  .account-manager {
-    padding: 1rem;
-  }
-  
-  .page-header h2 {
-    font-size: 2rem;
   }
 }
 </style>

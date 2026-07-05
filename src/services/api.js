@@ -157,18 +157,7 @@ export const entriesAPI = {
   getByMonth: (month) => api.get(`/entries/month/${month}`),
   
   // Create or update multiple entries
-  createOrUpdate: (entries) => {
-    console.log('📤 Sending entries to API:', entries)
-    return api.post('/entries', { entries })
-      .then(response => {
-        console.log('✅ Entries saved successfully:', response.data)
-        return response
-      })
-      .catch(error => {
-        console.error('❌ Failed to save entries:', error.response?.data || error.message)
-        throw error
-      })
-  },
+  createOrUpdate: (entries) => api.post('/entries', { entries }),
   
   // Update a single entry
   update: (id, entryData) => api.put(`/entries/${id}`, entryData),

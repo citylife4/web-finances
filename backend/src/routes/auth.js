@@ -1,13 +1,26 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
+const { authenticate } = require('../middleware/auth');
+const { jwtSecret: JWT_SECRET, jwtRefreshSecret: JWT_REFRESH_SECRET, isProduction } = require('../config');
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-token-secret-change-in-production';
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
+
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'strict'
+};
+
+const setRefreshCookie = (res, token) => {
+  res.cookie('refreshToken', token, {
+    ...REFRESH_COOKIE_OPTIONS,
+    maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+  });
+};
 
 // Generate access token
 const generateAccessToken = (userId) => {
@@ -71,14 +84,8 @@ router.post('/register', async (req, res) => {
     user.addRefreshToken(refreshToken, REFRESH_TOKEN_EXPIRY_DAYS);
     await user.save();
     
-    // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-    });
-    
+    setRefreshCookie(res, refreshToken);
+
     res.status(201).json({
       message: 'Registration successful',
       user: user.toJSON(),
@@ -127,14 +134,8 @@ router.post('/login', async (req, res) => {
     user.addRefreshToken(refreshToken, REFRESH_TOKEN_EXPIRY_DAYS);
     await user.save();
     
-    // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-    });
-    
+    setRefreshCookie(res, refreshToken);
+
     res.json({
       message: 'Login successful',
       user: user.toJSON(),
@@ -188,14 +189,8 @@ router.post('/refresh', async (req, res) => {
     user.addRefreshToken(newRefreshToken, REFRESH_TOKEN_EXPIRY_DAYS);
     await user.save();
     
-    // Set new refresh token in httpOnly cookie
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-    });
-    
+    setRefreshCookie(res, newRefreshToken);
+
     res.json({
       accessToken: newAccessToken
     });
@@ -225,12 +220,8 @@ router.post('/logout', async (req, res) => {
     }
     
     // Clear the cookie
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
-    
+    res.clearCookie('refreshToken', REFRESH_COOKIE_OPTIONS);
+
     res.json({ message: 'Logout successful' });
   } catch (error) {
     console.error('Logout error:', error);
@@ -263,12 +254,8 @@ router.post('/logout-all', async (req, res) => {
     }
     
     // Clear the cookie
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
-    });
-    
+    res.clearCookie('refreshToken', REFRESH_COOKIE_OPTIONS);
+
     res.json({ message: 'Logged out from all devices' });
   } catch (error) {
     console.error('Logout all error:', error);
@@ -277,36 +264,8 @@ router.post('/logout-all', async (req, res) => {
 });
 
 // GET /api/auth/me - Get current user
-router.get('/me', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Access token required' });
-    }
-    
-    const token = authHeader.substring(7);
-    
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
-      }
-      return res.status(401).json({ error: 'Invalid token' });
-    }
-    
-    const user = await User.findById(decoded.userId).select('-password -refreshTokens');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    res.json({ user });
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({ error: 'Failed to get user' });
-  }
+router.get('/me', authenticate, (req, res) => {
+  res.json({ user: req.user });
 });
 
 module.exports = router;

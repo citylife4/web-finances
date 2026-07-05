@@ -1,12 +1,12 @@
 <template>
-  <div class="category-manager">
+  <div class="category-manager page">
     <div class="page-header">
       <h2>Category Management</h2>
       <p class="subtitle">Manage categories for better organization of your accounts</p>
     </div>
 
     <!-- Add Category Section -->
-    <div class="add-category-section">
+    <div class="add-category-section panel">
       <h3>Add New Category</h3>
       <form @submit.prevent="addCategory" class="add-form">
         <div class="form-row">
@@ -52,10 +52,10 @@
 
     <!-- Categories List -->
     <div class="categories-list">
-      <div class="category-section" v-for="categoryType in store.categoryTypes" :key="categoryType._id">
+      <div class="category-section panel" v-for="categoryType in store.categoryTypes" :key="categoryType._id">
         <h3>{{ categoryType.icon }} {{ categoryType.displayName }} Categories</h3>
-        
-        <div v-if="getCategoriesByTypeId(categoryType._id).length === 0" class="no-categories">
+
+        <div v-if="getCategoriesByTypeId(categoryType._id).length === 0" class="empty-state">
           No categories defined for {{ categoryType.displayName.toLowerCase() }} yet.
         </div>
         
@@ -224,215 +224,92 @@ export default {
 </script>
 
 <style scoped>
-.category-manager {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: 40px;
-}
-
-.page-header h2 {
-  color: white;
-  font-size: 2.5rem;
-  margin-bottom: 10px;
-  font-weight: 300;
-}
-
-.subtitle {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
-  margin: 0;
-}
-
 .add-category-section {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  margin-bottom: 40px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-}
-
-.add-category-section h3 {
-  margin-bottom: 20px;
-  color: #333;
-  text-align: center;
-}
-
-.add-form {
-  max-width: 600px;
-  margin: 0 auto;
+  margin-bottom: 1.5rem;
 }
 
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: 1.25rem;
 }
 
-.form-group {
-  margin-bottom: 20px;
+.add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #555;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #e1e5e9;
-  border-radius: 8px;
-  font-size: 1rem;
-  transition: border-color 0.3s;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #545b62;
-}
-
-.btn-danger {
-  background: #dc3545;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #c82333;
+.add-form .btn {
+  align-self: flex-start;
 }
 
 .btn-small {
-  padding: 6px 12px;
-  font-size: 0.875rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
 }
 
 .categories-list {
   display: grid;
-  gap: 40px;
-}
-
-.category-section h3 {
-  color: white;
-  font-size: 1.5rem;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.no-categories {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 40px;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.1rem;
+  gap: 1.5rem;
 }
 
 .categories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
 }
 
 .category-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  transition: box-shadow 0.15s ease;
 }
 
 .category-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
 }
 
 .category-info h4 {
-  margin: 0 0 10px 0;
-  color: #333;
-  font-size: 1.2rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text);
+  font-size: 1.05rem;
 }
 
 .description {
-  color: #666;
-  margin: 10px 0;
+  color: var(--color-text-muted);
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
   font-style: italic;
 }
 
 .meta {
-  color: #999;
-  font-size: 0.875rem;
-  margin: 10px 0;
+  color: var(--color-text-soft);
+  font-size: 0.8rem;
+  margin: 0.5rem 0;
 }
 
 .card-actions {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
 }
 
 .edit-form .form-group {
-  margin-bottom: 15px;
-}
-
-.edit-form input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  margin-bottom: 0.85rem;
 }
 
 @media (max-width: 768px) {
   .form-row {
     grid-template-columns: 1fr;
   }
-  
+
   .categories-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .card-actions {
     flex-direction: column;
   }

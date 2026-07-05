@@ -15,7 +15,7 @@ export const authStore = reactive({
         await this.loadUser()
       } catch (error) {
         console.error('Failed to load user:', error)
-        this.logout()
+        await this.clearSession()
       }
     }
   },
@@ -73,6 +73,16 @@ export const authStore = reactive({
     }
   },
 
+  // Clear local session state
+  async clearSession() {
+    setAccessToken(null)
+    this.user = null
+    this.isAuthenticated = false
+
+    const { store } = await import('./api-store')
+    store.reset()
+  },
+
   // Logout user
   async logout() {
     try {
@@ -80,16 +90,7 @@ export const authStore = reactive({
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      setAccessToken(null)
-      this.user = null
-      this.isAuthenticated = false
-      
-      // Clear application store data
-      const { store } = await import('./api-store')
-      store.accounts = []
-      store.monthlyEntries = []
-      store.categories = []
-      store.error = null
+      await this.clearSession()
     }
   },
 
@@ -100,22 +101,16 @@ export const authStore = reactive({
     } catch (error) {
       console.error('Logout all error:', error)
     } finally {
-      setAccessToken(null)
-      this.user = null
-      this.isAuthenticated = false
-      
-      // Clear application store data
-      const { store } = await import('./api-store')
-      store.accounts = []
-      store.monthlyEntries = []
-      store.categories = []
-      store.error = null
+      await this.clearSession()
     }
   }
 })
 
-// Listen for auth:logout event from API interceptor
-window.addEventListener('auth:logout', () => {
+// Listen for auth:logout event from API interceptor (token refresh failure)
+window.addEventListener('auth:logout', async () => {
   authStore.user = null
   authStore.isAuthenticated = false
+
+  const { store } = await import('./api-store')
+  store.reset()
 })

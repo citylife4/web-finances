@@ -1,11 +1,17 @@
 const mongoose = require('mongoose');
 
 const categoryTypeSchema = new mongoose.Schema({
+  // System types (isSystem: true) have no userId and are visible to everyone;
+  // user-created types belong to a single user.
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
   name: {
     type: String,
     required: true,
-    trim: true,
-    unique: true
+    trim: true
   },
   displayName: {
     type: String,
@@ -32,5 +38,8 @@ const categoryTypeSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Unique type names per user (userId is null for shared system types)
+categoryTypeSchema.index({ userId: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('CategoryType', categoryTypeSchema);

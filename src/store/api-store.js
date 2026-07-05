@@ -1,6 +1,10 @@
 import { reactive } from 'vue'
 import { accountsAPI, entriesAPI, categoriesAPI, categoryTypesAPI } from '../services/api'
 
+// API responses sometimes return references as plain ids and sometimes as
+// populated documents; normalize both to the id string.
+export const idOf = (ref) => (typeof ref === 'string' ? ref : ref?._id)
+
 // Application store
 export const store = reactive({
   accounts: [],
@@ -9,23 +13,32 @@ export const store = reactive({
   categoryTypes: [],
   loading: false,
   error: null,
-  
+
   // Set loading state
   setLoading(loading) {
     this.loading = loading
   },
-  
+
   // Set error state
   setError(error) {
     this.error = error
     console.error('Store error:', error)
   },
-  
+
   // Clear error
   clearError() {
     this.error = null
   },
-  
+
+  // Clear all data (on logout)
+  reset() {
+    this.accounts = []
+    this.monthlyEntries = []
+    this.categories = []
+    this.categoryTypes = []
+    this.error = null
+  },
+
   // Account management
   async loadAccounts() {
     try {
@@ -40,14 +53,12 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   async addAccount(account) {
     try {
       this.setLoading(true)
       this.clearError()
-      console.log('Adding account via API:', account)
       const response = await accountsAPI.create(account)
-      console.log('Account created:', response.data)
       this.accounts.push(response.data)
       return response.data
     } catch (error) {
@@ -57,7 +68,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   async updateAccount(id, updates) {
     try {
       this.setLoading(true)
@@ -75,7 +86,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   async deleteAccount(id) {
     try {
       this.setLoading(true)
@@ -83,7 +94,7 @@ export const store = reactive({
       await accountsAPI.delete(id)
       this.accounts = this.accounts.filter(acc => acc._id !== id)
       // Also remove related entries from local state
-      this.monthlyEntries = this.monthlyEntries.filter(entry => entry.accountId._id !== id)
+      this.monthlyEntries = this.monthlyEntries.filter(entry => idOf(entry.accountId) !== id)
     } catch (error) {
       this.setError('Failed to delete account: ' + error.message)
       throw error
@@ -91,7 +102,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   // Monthly entries management
   async loadEntries() {
     try {
@@ -106,7 +117,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   async loadEntriesByMonth(month) {
     try {
       this.setLoading(true)
@@ -120,7 +131,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   async saveMonthlyEntries(entries) {
     try {
       this.setLoading(true)
@@ -136,7 +147,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
+
   async deleteMonthlyEntry(id) {
     try {
       this.setLoading(true)
@@ -150,37 +161,7 @@ export const store = reactive({
       this.setLoading(false)
     }
   },
-  
-  // Data analysis
-  getTotalByType(type, month = null) {
-    const relevantAccounts = this.accounts.filter(acc => acc.type === type)
-    
-    if (!month) {
-      // Get latest values
-      return relevantAccounts.reduce((total, account) => {
-        const latestEntry = this.monthlyEntries
-          .filter(entry => {
-            const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-            return entryAccountId === account._id
-          })
-          .sort((a, b) => new Date(b.month) - new Date(a.month))[0]
-        
-        return total + (latestEntry ? latestEntry.amount : 0)
-      }, 0)
-    }
-    
-    // Get values for specific month
-    return relevantAccounts.reduce((total, account) => {
-      const entry = this.monthlyEntries.find(
-        entry => {
-          const entryAccountId = typeof entry.accountId === 'string' ? entry.accountId : entry.accountId._id
-          return entryAccountId === account._id && entry.month === month
-        }
-      )
-      return total + (entry ? entry.amount : 0)
-    }, 0)
-  },
-  
+
   async getMonthlyTotals() {
     try {
       const response = await entriesAPI.getTotals()
@@ -190,7 +171,7 @@ export const store = reactive({
       throw error
     }
   },
-  
+
   // Initialize store
   async initialize() {
     try {
@@ -267,15 +248,8 @@ export const store = reactive({
     }
   },
 
-  getCategoriesByType(type) {
-    return this.categories.filter(cat => cat.type === type)
-  },
-
   getCategoriesByTypeId(typeId) {
-    return this.categories.filter(cat => {
-      const catTypeId = typeof cat.typeId === 'string' ? cat.typeId : cat.typeId?._id
-      return catTypeId === typeId
-    })
+    return this.categories.filter(cat => idOf(cat.typeId) === typeId)
   },
 
   // Category Type management
@@ -340,6 +314,3 @@ export const store = reactive({
     }
   }
 })
-
-// Note: Don't auto-initialize here to avoid race conditions
-// Call store.initialize() from App.vue or main.js after Vue app is mounted

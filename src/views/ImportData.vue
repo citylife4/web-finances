@@ -1,12 +1,12 @@
 <template>
-  <div class="import-data">
+  <div class="import-data page">
     <div class="page-header">
       <h2>Import Data from XLSX</h2>
       <p class="subtitle">Import financial data from Excel files with tabular format</p>
     </div>
 
     <!-- Instructions Card -->
-    <div class="instructions-card">
+    <div class="instructions-card panel">
       <h3>📋 File Format Requirements</h3>
       <div class="format-description">
         <p><strong>Required XLSX format:</strong></p>
@@ -77,7 +77,7 @@
     </div>
 
     <!-- Upload Section -->
-    <div class="upload-section">
+    <div class="upload-section panel">
       <h3>📁 Upload XLSX File</h3>
       
       <div class="file-upload-area" :class="{ 'dragover': isDragOver }" 
@@ -122,7 +122,7 @@
     </div>
 
     <!-- Progress Section -->
-    <div v-if="isProcessing" class="processing-section">
+    <div v-if="isProcessing" class="processing-section panel">
       <div class="progress-indicator">
         <div class="spinner"></div>
         <p>Processing your file...</p>
@@ -130,7 +130,7 @@
     </div>
 
     <!-- Preview Section -->
-    <div v-if="previewData && !isProcessing" class="preview-section">
+    <div v-if="previewData && !isProcessing" class="preview-section panel">
       <h3>📊 Preview Parsed Data</h3>
       
       <div class="preview-summary">
@@ -254,8 +254,9 @@
 
 <script>
 import * as XLSX from 'xlsx'
-import { store } from '../store/api-store'
+import { store, idOf } from '../store/api-store'
 import { downloadExampleXLSX } from '../utils/exampleFile'
+import { formatCurrency } from '../utils/format'
 
 export default {
   name: 'ImportData',
@@ -378,18 +379,12 @@ export default {
       
       // Convert to JSON with header row
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-      
-      console.log('📊 Sheet data:', jsonData)
-      console.log('📊 Total rows:', jsonData.length)
-      console.log('📊 First row (headers):', jsonData[0])
-      console.log('📊 Second row (first data):', jsonData[1])
-      
+
       if (jsonData.length < 2) {
         throw new Error(`Selected sheet must have at least 2 rows (header row and data rows). Found ${jsonData.length} row(s).`)
       }
       
       const parsedData = this.parseReverseTableData(jsonData)
-      console.log('📊 Parsed data:', parsedData)
       this.previewData = await this.preparePreviewData(parsedData)
     },
     
@@ -402,10 +397,7 @@ export default {
         .map(h => (h === undefined || h === null) ? '' : String(h))
         .map(h => h.trim())
         .filter(h => h)
-      
-      console.log('📋 Parsed headers:', headers)
-      console.log('📋 Headers count:', headers.length)
-      
+
       if (headers.length === 0) {
         throw new Error('No month/year columns found. Make sure your data has columns after the first 3 (Bank/Wallet, Type, Category).')
       }
@@ -419,16 +411,12 @@ export default {
         const accountName = row[0]
         const accountType = row[1]
         const subTypeOrCategory = row[2]
-        
-        console.log(`Row ${rowIndex}:`, { accountName, accountType, subTypeOrCategory, rowLength: row.length })
-        
+
         if (!accountName || accountName.trim() === '') {
-          console.log(`Skipping row ${rowIndex}: empty account name`)
           continue // Skip empty rows
         }
-        
+
         if (!accountType || !subTypeOrCategory) {
-          console.log(`Skipping row ${rowIndex}: missing type or category`)
           continue // Skip rows without type or sub-type/category
         }
         
@@ -493,10 +481,6 @@ export default {
           })
         }
       }
-      
-      console.log('✅ Parsing complete:', { accountsCount: accounts.length, entriesCount: entries.length })
-      console.log('✅ Accounts:', accounts)
-      console.log('✅ Entries sample:', entries.slice(0, 5))
       
       return { accounts, entries }
     },
@@ -583,7 +567,7 @@ export default {
       const accounts = parsedData.accounts.map(account => ({
         ...account,
         exists: existingAccounts.some(existing => {
-          const existingTypeId = typeof existing.typeId === 'string' ? existing.typeId : existing.typeId?._id
+          const existingTypeId = idOf(existing.typeId)
           return existing.name.toLowerCase() === account.name.toLowerCase() &&
             existingTypeId === account.typeId &&
             // Check if the category matches
@@ -618,11 +602,10 @@ export default {
             
             if (!categoryMap.has(categoryKey)) {
               // Check if category already exists
-              let existingCategory = store.categories.find(cat => {
-                const catTypeId = typeof cat.typeId === 'string' ? cat.typeId : cat.typeId?._id
-                return cat.name === accountData.categoryName && 
-                  catTypeId === accountData.typeId
-              })
+              let existingCategory = store.categories.find(cat =>
+                cat.name === accountData.categoryName &&
+                idOf(cat.typeId) === accountData.typeId
+              )
               
               if (!existingCategory) {
                 // Create new category
@@ -632,7 +615,6 @@ export default {
                     typeId: accountData.typeId,
                     description: `Imported from XLSX`
                   })
-                  console.log('Created category:', existingCategory)
                 } catch (error) {
                   console.warn(`Failed to create category '${accountData.categoryName}':`, error)
                   continue
@@ -653,7 +635,7 @@ export default {
           if (accountData.exists) {
             // Find existing account
             account = store.accounts.find(existing => {
-              const existingTypeId = typeof existing.typeId === 'string' ? existing.typeId : existing.typeId?._id
+              const existingTypeId = idOf(existing.typeId)
               return existing.name.toLowerCase() === accountData.name.toLowerCase() &&
                 existingTypeId === accountData.typeId &&
                 // Check category match
@@ -677,7 +659,6 @@ export default {
             }
             
             account = await store.addAccount(accountPayload)
-            console.log('Created account:', account)
           }
           
           if (account && account._id) {
@@ -702,9 +683,6 @@ export default {
             console.warn(`No account ID found for entry:`, entryData)
           }
         }
-        
-        console.log('📊 Prepared entries for import:', entries)
-        console.log('📊 Total entries:', entries.length)
         
         if (entries.length > 0) {
           await store.saveMonthlyEntries(entries)
@@ -755,15 +733,8 @@ export default {
     downloadExample() {
       downloadExampleXLSX()
     },
-    
-    formatCurrency(amount) {
-      return new Intl.NumberFormat('de-DE', {
-        style: 'currency',
-        currency: 'EUR',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2
-      }).format(amount)
-    }
+
+    formatCurrency
   },
   async mounted() {
     // Reload category types on mount to ensure we have the latest
@@ -777,44 +748,9 @@ export default {
 </script>
 
 <style scoped>
-.import-data {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.page-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: 2.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.subtitle {
-  color: #666;
-  margin-top: 0.5rem;
-}
-
 /* Instructions Card */
 .instructions-card {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 2rem;
-}
-
-.instructions-card h3 {
-  margin-top: 0;
-  color: #333;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .format-description ul {
@@ -827,10 +763,10 @@ export default {
 }
 
 .example-note {
-  background: #f8f9fa;
+  background: var(--color-surface-muted);
   padding: 1rem;
-  border-radius: 8px;
-  border-left: 4px solid #667eea;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--color-primary);
   margin: 1rem 0;
 }
 
@@ -883,33 +819,23 @@ export default {
 
 /* Upload Section */
 .upload-section {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 2rem;
-}
-
-.upload-section h3 {
-  margin-top: 0;
-  color: #333;
   margin-bottom: 1.5rem;
 }
 
 .file-upload-area {
-  border: 2px dashed #ddd;
-  border-radius: 10px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
   padding: 3rem 2rem;
   text-align: center;
-  transition: all 0.3s;
+  transition: all 0.15s ease;
   cursor: pointer;
   position: relative;
 }
 
 .file-upload-area:hover,
 .file-upload-area.dragover {
-  border-color: #667eea;
-  background: rgba(102, 126, 234, 0.05);
+  border-color: var(--color-primary);
+  background: rgba(91, 110, 232, 0.05);
 }
 
 .file-input {
@@ -942,9 +868,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 8px;
+  background: var(--color-surface-muted);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
 }
 
 .file-name {
@@ -953,11 +879,7 @@ export default {
 
 /* Processing Section */
 .processing-section {
-  background: white;
-  border-radius: 15px;
-  padding: 3rem 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   text-align: center;
 }
 
@@ -969,31 +891,20 @@ export default {
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.9s linear infinite;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Preview Section */
 .preview-section {
-  background: white;
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  margin-bottom: 2rem;
-}
-
-.preview-section h3 {
-  margin-top: 0;
-  color: #333;
   margin-bottom: 1.5rem;
 }
 
@@ -1155,109 +1066,61 @@ export default {
   justify-content: center;
 }
 
-/* Buttons */
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  text-decoration: none;
-  display: inline-block;
-  text-align: center;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .btn-small {
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-  background: #6c757d;
-  color: white;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: #5a6268;
-  transform: translateY(-2px);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
 }
 
 /* Sheet Selection */
 .sheet-selection {
   margin-top: 1.5rem;
-  padding: 1.5rem;
-  background: #f8f9fa;
-  border-radius: 12px;
-  border: 1px solid #dee2e6;
+  padding: 1.25rem;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
 }
 
 .sheet-selection h4 {
   margin-top: 0;
-  color: #495057;
-  font-size: 1.1rem;
+  color: var(--color-text);
+  font-size: 1rem;
 }
 
 .sheet-info {
-  color: #6c757d;
+  color: var(--color-text-muted);
   margin-bottom: 1rem;
 }
 
 .sheet-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .sheet-button {
-  padding: 0.75rem 1.5rem;
-  background: white;
-  border: 2px solid #dee2e6;
-  border-radius: 8px;
+  padding: 0.6rem 1.25rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
   font-weight: 500;
-  color: #495057;
+  font-family: inherit;
+  color: var(--color-text);
 }
 
 .sheet-button:hover {
-  border-color: #667eea;
-  background: #f8f9ff;
-  transform: translateY(-2px);
+  border-color: var(--color-primary);
 }
 
 .sheet-button.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--gradient-brand);
   color: white;
-  border-color: #667eea;
+  border-color: transparent;
 }
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .import-data {
-    padding: 1rem;
-  }
-  
-  .page-header h2 {
-    font-size: 2rem;
-  }
-  
   .preview-summary {
     grid-template-columns: 1fr;
   }

@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const monthlyEntrySchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   accountId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Account',
@@ -24,7 +29,6 @@ const monthlyEntrySchema = new mongoose.Schema({
 monthlyEntrySchema.index({ accountId: 1, month: 1 }, { unique: true });
 
 // Index for analytics queries
-monthlyEntrySchema.index({ month: 1 });
-monthlyEntrySchema.index({ accountId: 1 });
+monthlyEntrySchema.index({ userId: 1, month: 1 });
 
 module.exports = mongoose.model('MonthlyEntry', monthlyEntrySchema);
